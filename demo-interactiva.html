@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ResQ · Dispositivo Táctico de Seguridad & Ficha Médica Digital | Ushuaia, Patagonia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --resq-orange: #ff5500;
+      --resq-red: #dc2626;
+      --resq-dark: #0b0f17;
+    }
+    body {
+      background-color: #0b0f17;
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    input:user-invalid {
+      border-color: #ef4444;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-16">
+
+  <!-- BARRA DE SIMULACIÓN DE ESCENARIOS (Para probar todos los estados del QR) -->
+  <div class="bg-slate-950 border-b border-orange-500/40 px-3 py-2.5 sticky top-0 z-50">
+    <div class="max-w-xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
+        <span class="text-[11px] font-extrabold uppercase tracking-wider text-orange-400">
+          Simulador ResQ en Vivo:
+        </span>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        <button onclick="switchScenario('active')" id="tab-active" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#ff5500] text-white transition">
+          🚨 1. Escaneo Emergencia (QR Activo)
+        </button>
+        <button onclick="switchScenario('unclaimed')" id="tab-unclaimed" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white transition">
+          📦 2. QR Virgen (Abrir Blíster)
+        </button>
+        <button onclick="switchScenario('batch')" id="tab-batch" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white transition">
+          🖨️ 3. Lotes QR Impresión 3D
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CABECERA OFICIAL DE MARCA RESQ -->
+  <div class="bg-white text-slate-900 border-b-4 border-[#ff5500] py-4 px-4 text-center shadow-lg">
+    <p class="text-[10px] sm:text-xs font-extrabold tracking-widest text-[#ff5500] uppercase">
+      EXPEDITION SAFETY &amp; MEDICAL SOS SYSTEM • USHUAIA, PATAGONIA
+    </p>
+    <h1 class="text-4xl sm:text-5xl font-black tracking-tight text-slate-950 leading-none my-1">
+      ResQ
+    </h1>
+    <p class="text-[11px] sm:text-xs font-semibold tracking-wider text-slate-600 uppercase">
+      DISPOSITIVO TÁCTICO DE SEGURIDAD &amp; FICHA MÉDICA DIGITAL
+    </p>
+    <p class="text-sm sm:text-base font-black italic text-[#e60000] mt-0.5">
+      « Escaneá. Asistí. Rescatá. »
+    </p>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- ESCENARIO 1: VISTA DE EMERGENCIA PARA SOCORRISTA (<1s, SIN LOGIN)          -->
+  <!-- ========================================================================== -->
+  <div id="view-active" class="max-w-lg mx-auto px-4 pt-4 space-y-4">
+    <!-- Barra de Estado QR + Selector Multilingüe ES / EN / PT -->
+    <div class="flex items-center justify-between bg-[#131b2e] border border-slate-800 rounded-2xl px-3.5 py-2.5">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-mono bg-red-600/20 text-red-400 border border-red-500/40 px-2.5 py-1 rounded-lg font-black" id="display-qr-code">
+          USH-0001
+        </span>
+        <span class="text-[11px] font-extrabold text-emerald-400" id="lbl-verified">
+          ● QR ACTIVO
+        </span>
+      </div>
+
+      <!-- Selector Instantáneo ES / EN / PT -->
+      <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <button onclick="setLanguage('es')" id="lang-es" class="px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase bg-[#ff5500] text-white">ES</button>
+        <button onclick="setLanguage('en')" id="lang-en" class="px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase text-slate-400 hover:text-white">EN</button>
+        <button onclick="setLanguage('pt')" id="lang-pt" class="px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase text-slate-400 hover:text-white">PT</button>
+      </div>
+    </div>
+
+    <!-- Banner Táctico SOS -->
+    <div id="lbl-sos-banner" class="bg-red-600 text-white text-center py-2 px-3 rounded-xl text-xs font-black tracking-widest uppercase shadow-md shadow-red-900/30">
+      🚨 FICHA DE EMERGENCIA PARA SOCORRISTAS
+    </div>
+
+    <!-- a) Nombre y Apellido + b) Grupo Sanguíneo -->
+    <section class="bg-[#131b2e] border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3">
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" id="lbl-rider-title">PILOTO REGISTRADO</span>
+        <h2 class="text-2xl font-black text-white leading-tight" id="val-full-name">Martín Alejandro Gómez</h2>
+        <p class="text-xs text-slate-400 mt-1">
+          <span id="lbl-country">País</span>: <strong class="text-slate-200" id="val-nationality">Argentina (AR)</strong> · Doc: <strong class="text-slate-300">***842</strong>
+        </p>
+      </div>
+      <div class="shrink-0 text-center bg-red-600/20 border-2 border-red-500 rounded-2xl px-4 py-2.5">
+        <span class="block text-[9px] font-extrabold uppercase tracking-wider text-red-300" id="lbl-blood">GRUPO SANGUÍNEO</span>
+        <span class="text-3xl font-black text-white" id="val-blood">O-</span>
+      </div>
+    </section>
+
+    <!-- c) ENVIAR UBICACIÓN GPS AL CONTACTO DE EMERGENCIA -->
+    <section class="bg-gradient-to-br from-orange-600/25 to-red-600/20 border-2 border-[#ff5500] rounded-2xl p-4 space-y-3">
+      <div>
+        <h3 class="text-sm font-black uppercase tracking-wider text-orange-400" id="lbl-gps-title">
+          📍 ENVIAR UBICACIÓN DE EMERGENCIA
+        </h3>
+        <p class="text-xs text-slate-300 mt-0.5" id="lbl-gps-sub">
+          Toca para capturar tu GPS actual y enviar alerta inmediata al contacto de emergencia.
+        </p>
+      </div>
+
+      <button onclick="sendSosLocation('whatsapp')" class="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/60 transition">
+        <span>📲</span>
+        <span id="lbl-btn-wa">Enviar Ubicación GPS por WhatsApp</span>
+      </button>
+
+      <button onclick="sendSosLocation('sms')" class="w-full py-2.5 px-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition">
+        <span>✉️</span>
+        <span id="lbl-btn-sms">Respaldo Baja Señal (2G/Edge): Enviar GPS por SMS</span>
+      </button>
+
+      <div id="gps-box" class="hidden bg-slate-950/90 border border-emerald-500/40 rounded-xl p-2.5 text-center">
+        <p class="text-[11px] font-bold text-emerald-400" id="gps-status-txt">✓ Coordenadas GPS capturadas</p>
+        <p class="text-xs font-mono text-white mt-0.5" id="gps-coords-txt"></p>
+      </div>
+    </section>
+
+    <!-- d) LLAMADA DE EMERGENCIA + CONTACTO -->
+    <section class="bg-[#131b2e] border border-slate-800 rounded-2xl p-4 space-y-3">
+      <h3 class="text-xs font-black uppercase tracking-wider text-slate-400" id="lbl-contacts-title">
+        📞 CONTACTO DE EMERGENCIA DEL PILOTO
+      </h3>
+
+      <div class="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 gap-2">
+        <div>
+          <p class="text-base font-extrabold text-white" id="val-contact-name">Laura Fernández</p>
+          <p class="text-xs text-orange-400 font-semibold">
+            <span id="val-contact-rel">Esposa</span> · <span id="val-contact-phone">+5492901654321</span>
+          </p>
+        </div>
+        <a id="link-call-contact" href="tel:+5492901654321" class="bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider px-4 py-3 rounded-xl shadow-md shadow-red-950 shrink-0">
+          📞 <span id="lbl-call-now">LLAMAR AHORA</span>
+        </a>
+      </div>
+
+      <!-- Números de Emergencia Locales (Ushuaia / Argentina) -->
+      <div class="pt-1">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2" id="lbl-local-sos">
+          🚑 CENTRALES DE EMERGENCIA EN RUTA (USHUAIA / TDF)
+        </p>
+        <div class="grid grid-cols-3 gap-2">
+          <a href="tel:107" class="bg-red-950/70 border border-red-500/40 hover:bg-red-900/60 rounded-xl py-2.5 text-center text-xs font-extrabold text-red-200">
+            107 Hospital
+          </a>
+          <a href="tel:911" class="bg-blue-950/70 border border-blue-500/40 hover:bg-blue-900/60 rounded-xl py-2.5 text-center text-xs font-extrabold text-blue-200">
+            911 Policía
+          </a>
+          <a href="tel:103" class="bg-orange-950/70 border border-orange-500/40 hover:bg-orange-900/60 rounded-xl py-2.5 text-center text-xs font-extrabold text-orange-200">
+            103 Def. Civil
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- b) CONDICIÓN MÉDICA DETALLADA -->
+    <section class="bg-[#131b2e] border border-slate-800 rounded-2xl p-4 space-y-3">
+      <h3 class="text-xs font-black uppercase tracking-wider text-red-400" id="lbl-med-title">
+        ⚕️ ALERTA MÉDICA / CONDICIONES DECLARADAS
+      </h3>
+
+      <div class="bg-red-950/50 border border-red-500/50 rounded-xl p-3">
+        <span class="block text-[10px] font-extrabold uppercase text-red-300" id="lbl-allergies">
+          ⚠️ ALERGIAS CRÍTICAS
+        </span>
+        <p class="font-bold text-white text-sm mt-0.5" id="val-allergies">
+          ALERGIA SEVERA A PENICILINA Y DERIVADOS BETA-LACTÁMICOS
+        </p>
+      </div>
+
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
+        <span class="block text-[10px] font-bold uppercase text-slate-400" id="lbl-conditions">
+          CONDICIONES MÉDICAS Y MEDICACIÓN HABITUAL
+        </span>
+        <p class="text-slate-100 text-sm mt-0.5" id="val-conditions">
+          Hipertensión arterial controlada (Losartán 50mg). Tornillo de titanio en clavícula derecha.
+        </p>
+      </div>
+
+      <div class="flex items-center justify-between text-xs pt-1 text-slate-300">
+        <span id="lbl-health-ins">Obra Social / Seguro Médico:</span>
+        <strong class="text-white" id="val-health-ins">OSDE 310 / Assist Card (61-0492817-01)</strong>
+      </div>
+    </section>
+
+    <!-- e) DATOS DEL VEHÍCULO (FOTO, PATENTE, SEGURO) -->
+    <section class="bg-[#131b2e] border border-slate-800 rounded-2xl overflow-hidden">
+      <div class="relative h-44 w-full bg-slate-950">
+        <img id="val-bike-photo" src="https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=900&q=80" alt="Motocicleta del piloto" class="h-full w-full object-cover opacity-90" />
+        <div class="absolute inset-0 bg-gradient-to-t from-[#131b2e] via-transparent to-transparent"></div>
+        <span id="val-bike-plate-badge" class="absolute bottom-3 left-4 bg-black/85 border border-white/25 px-3 py-1 rounded-lg font-mono text-sm font-black tracking-widest text-white">
+          A219KLP
+        </span>
+      </div>
+
+      <div class="p-4 space-y-3">
+        <h3 class="text-xs font-black uppercase tracking-wider text-slate-400" id="lbl-vehicle-title">
+          🏍️ DATOS DEL VEHÍCULO Y SEGURO
+        </h3>
+        <div>
+          <p class="text-lg font-extrabold text-white" id="val-bike-model">
+            Honda CRF1100L Africa Twin Adventure Sports (2024)
+          </p>
+          <p class="text-xs text-slate-400">
+            <span id="lbl-plate">Patente</span>: <strong class="font-mono text-white" id="val-bike-plate">A219KLP</strong> ·
+            Color: <strong class="text-slate-200" id="val-bike-color">Tricolor Blanco/Azul/Rojo</strong>
+          </p>
+        </div>
+
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2">
+          <div>
+            <span class="block text-[10px] uppercase font-bold text-slate-400" id="lbl-ins-company">Compañía de Seguro</span>
+            <p class="text-sm font-bold text-white" id="val-bike-ins">Federación Patronal Seguros</p>
+            <p class="text-xs text-slate-400">Póliza: <span id="val-bike-policy">FP-9948120-MOTO</span></p>
+          </div>
+          <a href="tel:08002220022" class="bg-slate-800 hover:bg-slate-700 text-orange-400 border border-orange-500/30 font-bold text-xs px-3 py-2 rounded-xl shrink-0">
+            🛠️ Asistencia / Grúa
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacidad Antirrobo + Botón de Login del Piloto -->
+    <footer class="pt-2 text-center space-y-3">
+      <p class="text-[11px] text-slate-400 bg-slate-900/60 border border-slate-800/80 rounded-xl p-2.5" id="lbl-privacy">
+        🛡️ Protección Antirrobo Activa: Esta ficha nunca expone el domicilio particular ni el número de documento completo del titular.
+      </p>
+      <button onclick="openPilotLogin()" class="text-xs font-bold text-orange-400 hover:text-orange-300 underline underline-offset-4" id="lbl-pilot-btn">
+        🔐 Soy el piloto · Iniciar sesión para editar mis datos
+      </button>
+    </footer>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- ESCENARIO 2: ACTIVACIÓN DE QR VIRGEN (BLÍSTER) O EDICIÓN DEL PILOTO        -->
+  <!-- ========================================================================== -->
+  <div id="view-unclaimed" class="hidden max-w-xl mx-auto px-4 pt-6 space-y-6">
+    <div class="bg-gradient-to-r from-orange-600/20 to-red-600/10 border border-orange-500/40 rounded-2xl p-4">
+      <span id="form-badge" class="inline-block text-[11px] font-bold uppercase tracking-wider bg-[#ff5500] text-white px-2.5 py-0.5 rounded mb-2">
+        QR Virgen en Blíster · Activación Libre (1º Escaneo)
+      </span>
+      <h2 id="form-title" class="text-xl font-extrabold text-white">
+        ¡Bienvenido a ResQ! Activa tu Llavero QR (Código: USH-0002)
+      </h2>
+      <p class="text-xs text-slate-300 mt-1">
+        Al ser el primero en escanear este QR tras abrir el blíster, quedará vinculado de forma exclusiva a tu cuenta. Para futuras modificaciones solo tendrás que iniciar sesión.
+      </p>
+    </div>
+
+    <form onsubmit="saveProfileForm(event)" class="space-y-5">
+      <!-- Credenciales para bloquear el QR -->
+      <section class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 space-y-4">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-orange-400">
+          1. Tu Cuenta de Piloto (Para futuras actualizaciones)
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Correo Electrónico *</label>
+            <input type="email" id="inp-email" required placeholder="piloto@email.com" value="martin@patagonia.ar" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Contraseña de Seguridad *</label>
+            <input type="password" id="inp-pass" required minlength="6" value="123456" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Datos del Piloto y Condición Médica -->
+      <section class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 space-y-4">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-orange-400">
+          2. Datos del Piloto y Ficha Médica
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">a) Nombre y Apellido *</label>
+            <input type="text" id="inp-name" required value="Martín Alejandro Gómez" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Grupo Sanguíneo *</label>
+            <select id="inp-blood" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm font-bold text-red-400">
+              <option value="O-">O-</option>
+              <option value="O+">O+</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="Desconocido">Desconocido</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">b) Alergias Críticas</label>
+            <input type="text" id="inp-allergies" value="ALERGIA SEVERA A PENICILINA" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Obra Social / Seguro Médico</label>
+            <input type="text" id="inp-health" value="OSDE 310 / Assist Card" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Condición Médica / Medicación Habitual</label>
+          <textarea id="inp-conditions" rows="2" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2 text-sm text-white">Hipertensión arterial controlada (Losartán 50mg). Tornillo de titanio en clavícula derecha.</textarea>
+        </div>
+      </section>
+
+      <!-- Contacto de Emergencia y Vehículo -->
+      <section class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 space-y-4">
+        <h3 class="text-sm font-bold uppercase tracking-wider text-orange-400">
+          3. Contacto de Emergencia y Datos del Vehículo
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">d) Nombre Contacto *</label>
+            <input type="text" id="inp-contact-name" required value="Laura Fernández" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Vínculo *</label>
+            <input type="text" id="inp-contact-rel" required value="Esposa" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Teléfono WhatsApp/Llamada *</label>
+            <input type="tel" id="inp-contact-phone" required value="+5492901654321" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+        </div>
+
+        <hr class="border-slate-800" />
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">e) Marca y Modelo de Moto *</label>
+            <input type="text" id="inp-bike-model" required value="Honda CRF1100L Africa Twin Adventure Sports (2024)" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Patente / Dominio *</label>
+            <input type="text" id="inp-bike-plate" required value="A219KLP" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm font-mono uppercase text-white" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Compañía de Seguro</label>
+            <input type="text" id="inp-bike-ins" value="Federación Patronal Seguros" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Número de Póliza</label>
+            <input type="text" id="inp-bike-policy" value="FP-9948120-MOTO" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+          </div>
+        </div>
+      </section>
+
+      <button type="submit" class="w-full py-4 rounded-2xl bg-[#ff5500] hover:bg-orange-600 text-white font-black text-base uppercase tracking-wider shadow-lg shadow-orange-600/30 transition">
+        ✓ Activar Llavero QR y Ver Ficha de Emergencia
+      </button>
+    </form>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- ESCENARIO 3: GENERADOR DE LOTES DE QR PARA BLÍSTER E IMPRESIÓN 3D          -->
+  <!-- ========================================================================== -->
+  <div id="view-batch" class="hidden max-w-xl mx-auto px-4 pt-6 space-y-5">
+    <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 space-y-3">
+      <span class="inline-block text-[11px] font-bold uppercase tracking-wider bg-orange-500/20 text-orange-400 border border-orange-500/40 px-2.5 py-0.5 rounded">
+        Producción Bambu Lab A1 Combo · Ushuaia
+      </span>
+      <h2 class="text-xl font-black text-white">
+        Generador de Lotes de Códigos QR para Blíster
+      </h2>
+      <p class="text-xs text-slate-300">
+        Cada llavero impreso lleva una URL corta única (ej. <code class="text-orange-400">https://resq.ar/q/USH-0001</code>). Cuanto más corta es la URL, menos densos son los módulos del QR y mucho más nítido sale impreso en 3D con boquilla de 0.4mm.
+      </p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Dominio Base</label>
+          <input type="text" id="batch-domain" value="https://resq.ar/q/" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Prefijo de Lote</label>
+          <input type="text" id="batch-prefix" value="USH" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono uppercase text-white" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Cantidad a previsualizar</label>
+          <input type="number" id="batch-count" value="6" min="1" max="50" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
+        </div>
+      </div>
+
+      <button onclick="renderBatchList()" class="w-full py-2.5 rounded-xl bg-[#ff5500] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider">
+        Generar Códigos del Lote
+      </button>
+    </div>
+
+    <div id="batch-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+  </div>
+
+  <!-- MODAL DE LOGIN DEL PILOTO -->
+  <div id="modal-login" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#131b2e] border border-slate-700 rounded-2xl max-w-sm w-full p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-black text-white">🔐 Acceso del Piloto</h3>
+        <button onclick="closePilotLogin()" class="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+      <p class="text-xs text-slate-300">
+        Ingresa tu correo y contraseña para desbloquear la edición de tu llavero QR.
+      </p>
+      <form onsubmit="handleModalLogin(event)" class="space-y-3">
+        <input type="email" required value="martin@patagonia.ar" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+        <input type="password" required value="123456" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white" />
+        <button type="submit" class="w-full py-3 rounded-xl bg-[#ff5500] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider">
+          Ingresar y Editar Mis Datos
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentLang = 'es';
+    let lastMapsUrl = '';
+    let lastCoords = '';
+
+    const DICT = {
+      es: {
+        verified: '● QR ACTIVO',
+        sosBanner: '🚨 FICHA DE EMERGENCIA PARA SOCORRISTAS',
+        riderTitle: 'PILOTO REGISTRADO',
+        country: 'País',
+        blood: 'GRUPO SANGUÍNEO',
+        gpsTitle: '📍 ENVIAR UBICACIÓN DE EMERGENCIA',
+        gpsSub: 'Toca para capturar tu GPS actual y enviar alerta inmediata al contacto de emergencia.',
+        btnWa: 'Enviar Ubicación GPS por WhatsApp',
+        btnSms: 'Respaldo Baja Señal (2G/Edge): Enviar GPS por SMS',
+        contactsTitle: '📞 CONTACTO DE EMERGENCIA DEL PILOTO',
+        callNow: 'LLAMAR AHORA',
+        localSos: '🚑 CENTRALES DE EMERGENCIA EN RUTA (USHUAIA / TDF)',
+        medTitle: '⚕️ ALERTA MÉDICA / CONDICIONES DECLARADAS',
+        allergies: '⚠️ ALERGIAS CRÍTICAS',
+        conditions: 'CONDICIONES MÉDICAS Y MEDICACIÓN HABITUAL',
+        healthIns: 'Obra Social / Seguro Médico:',
+        vehicleTitle: '🏍️ DATOS DEL VEHÍCULO Y SEGURO',
+        plate: 'Patente',
+        insCompany: 'Compañía de Seguro',
+        privacy: '🛡️ Protección Antirrobo Activa: Esta ficha nunca expone el domicilio particular ni el número de documento completo del titular.',
+        pilotBtn: '🔐 Soy el piloto · Iniciar sesión para editar mis datos'
+      },
+      en: {
+        verified: '● ACTIVE QR',
+        sosBanner: '🚨 FIRST RESPONDER EMERGENCY PROFILE',
+        riderTitle: 'REGISTERED RIDER',
+        country: 'Country',
+        blood: 'BLOOD TYPE',
+        gpsTitle: '📍 SEND EMERGENCY GPS LOCATION',
+        gpsSub: 'Tap to capture your current GPS coordinates and alert the rider’s emergency contact.',
+        btnWa: 'Send GPS Location via WhatsApp',
+        btnSms: 'Low Signal Backup (2G/Edge): Send GPS via SMS',
+        contactsTitle: '📞 RIDER EMERGENCY CONTACT',
+        callNow: 'CALL NOW',
+        localSos: '🚑 LOCAL EMERGENCY SERVICES (USHUAIA / ARGENTINA)',
+        medTitle: '⚕️ MEDICAL ALERT / DECLARED CONDITIONS',
+        allergies: '⚠️ CRITICAL ALLERGIES',
+        conditions: 'MEDICAL CONDITIONS & MEDICATIONS',
+        healthIns: 'Medical / Travel Insurance:',
+        vehicleTitle: '🏍️ MOTORCYCLE & INSURANCE INFO',
+        plate: 'License Plate',
+        insCompany: 'Insurance Company',
+        privacy: '🛡️ Anti-Theft Privacy Active: Home address and full ID number are never stored or displayed.',
+        pilotBtn: '🔐 I am the rider · Log in to edit my profile'
+      },
+      pt: {
+        verified: '● QR ATIVO',
+        sosBanner: '🚨 FICHA DE EMERGÊNCIA PARA SOCORRISTAS',
+        riderTitle: 'PILOTO REGISTRADO',
+        country: 'País',
+        blood: 'TIPO SANGUÍNEO',
+        gpsTitle: '📍 ENVIAR LOCALIZAÇÃO DE EMERGÊNCIA',
+        gpsSub: 'Toque para capturar seu GPS atual e avisar o contato de emergência do motociclista.',
+        btnWa: 'Enviar Localização GPS por WhatsApp',
+        btnSms: 'Sinal Fraco (2G/Edge): Enviar GPS por SMS',
+        contactsTitle: '📞 CONTATO DE EMERGÊNCIA DO PILOTO',
+        callNow: 'LIGAR AGORA',
+        localSos: '🚑 EMERGÊNCIAS LOCAIS NA ESTRADA (USHUAIA / TDF)',
+        medTitle: '⚕️ ALERTA MÉDICO / CONDIÇÕES DECLARADAS',
+        allergies: '⚠️ ALERGIAS CRÍTICAS',
+        conditions: 'CONDIÇÕES MÉDICAS E MEDICAÇÃO CONTÍNUA',
+        healthIns: 'Plano de Saúde / Seguro Viagem:',
+        vehicleTitle: '🏍️ DADOS DA MOTO E SEGURO',
+        plate: 'Placa / Patente',
+        insCompany: 'Seguradora',
+        privacy: '🛡️ Proteção Antifurto Ativa: Endereço residencial e documento completo nunca são exibidos.',
+        pilotBtn: '🔐 Sou o piloto · Fazer login para editar meus dados'
+      }
+    };
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      ['es', 'en', 'pt'].forEach(l => {
+        const btn = document.getElementById('lang-' + l);
+        if (l === lang) {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase bg-[#ff5500] text-white';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase text-slate-400 hover:text-white';
+        }
+      });
+
+      const t = DICT[lang];
+      document.getElementById('lbl-verified').textContent = t.verified;
+      document.getElementById('lbl-sos-banner').textContent = t.sosBanner;
+      document.getElementById('lbl-rider-title').textContent = t.riderTitle;
+      document.getElementById('lbl-country').textContent = t.country;
+      document.getElementById('lbl-blood').textContent = t.blood;
+      document.getElementById('lbl-gps-title').textContent = t.gpsTitle;
+      document.getElementById('lbl-gps-sub').textContent = t.gpsSub;
+      document.getElementById('lbl-btn-wa').textContent = t.btnWa;
+      document.getElementById('lbl-btn-sms').textContent = t.btnSms;
+      document.getElementById('lbl-contacts-title').textContent = t.contactsTitle;
+      document.getElementById('lbl-call-now').textContent = t.callNow;
+      document.getElementById('lbl-local-sos').textContent = t.localSos;
+      document.getElementById('lbl-med-title').textContent = t.medTitle;
+      document.getElementById('lbl-allergies').textContent = t.allergies;
+      document.getElementById('lbl-conditions').textContent = t.conditions;
+      document.getElementById('lbl-health-ins').textContent = t.healthIns;
+      document.getElementById('lbl-vehicle-title').textContent = t.vehicleTitle;
+      document.getElementById('lbl-plate').textContent = t.plate;
+      document.getElementById('lbl-ins-company').textContent = t.insCompany;
+      document.getElementById('lbl-privacy').textContent = t.privacy;
+      document.getElementById('lbl-pilot-btn').textContent = t.pilotBtn;
+    }
+
+    function switchScenario(mode) {
+      ['active', 'unclaimed', 'batch'].forEach(m => {
+        document.getElementById('view-' + m).classList.toggle('hidden', m !== mode);
+        const tab = document.getElementById('tab-' + m);
+        if (m === mode) {
+          tab.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-[#ff5500] text-white transition';
+        } else {
+          tab.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white transition';
+        }
+      });
+      if (mode === 'batch') renderBatchList();
+    }
+
+    function sendSosLocation(channel) {
+      const riderName = document.getElementById('val-full-name').textContent;
+      const phone = document.getElementById('val-contact-phone').textContent.replace(/[^+\d]/g, '');
+      const gpsBox = document.getElementById('gps-box');
+      const gpsStatusTxt = document.getElementById('gps-status-txt');
+      const gpsCoordsTxt = document.getElementById('gps-coords-txt');
+
+      gpsBox.classList.remove('hidden');
+      gpsStatusTxt.textContent = '🛰️ Obteniendo coordenadas GPS satelitales...';
+
+      const launchMessage = (mapsUrl, coordsStr) => {
+        const msg = `🚨 *ALERTA SOS ResQ* 🚨\nEscaneé el llavero de emergencia de *${riderName}*.\n📍 Ubicación GPS: ${mapsUrl}\n🧭 Coordenadas: ${coordsStr}`;
+        if (channel === 'whatsapp') {
+          window.open(`https://wa.me/${phone.replace(/^\+/, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+        } else {
+          window.location.href = `sms:${phone}?body=${encodeURIComponent(msg)}`;
+        }
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude.toFixed(6);
+            const lng = pos.coords.longitude.toFixed(6);
+            const acc = Math.round(pos.coords.accuracy);
+            lastCoords = `${lat}, ${lng} (±${acc}m)`;
+            lastMapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+            gpsStatusTxt.textContent = '✓ Coordenadas GPS listas (Ushuaia / Ruta)';
+            gpsCoordsTxt.textContent = lastCoords;
+            launchMessage(lastMapsUrl, lastCoords);
+          },
+          () => {
+            // Fallback con coordenadas de demostración Ruta 3 Ushuaia si el navegador bloquea GPS en archivo local
+            lastCoords = '-54.798120, -68.303010 (RN3 Ushuaia)';
+            lastMapsUrl = 'https://maps.google.com/?q=-54.798120,-68.303010';
+            gpsStatusTxt.textContent = '✓ Ubicación lista (Modo Demo RN3 Ushuaia)';
+            gpsCoordsTxt.textContent = lastCoords;
+            launchMessage(lastMapsUrl, lastCoords);
+          },
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        lastCoords = '-54.798120, -68.303010 (RN3 Ushuaia)';
+        lastMapsUrl = 'https://maps.google.com/?q=-54.798120,-68.303010';
+        gpsStatusTxt.textContent = '✓ Ubicación lista';
+        gpsCoordsTxt.textContent = lastCoords;
+        launchMessage(lastMapsUrl, lastCoords);
+      }
+    }
+
+    function saveProfileForm(e) {
+      e.preventDefault();
+      document.getElementById('val-full-name').textContent = document.getElementById('inp-name').value;
+      document.getElementById('val-blood').textContent = document.getElementById('inp-blood').value;
+      document.getElementById('val-allergies').textContent = document.getElementById('inp-allergies').value || 'Sin alergias declaradas';
+      document.getElementById('val-health-ins').textContent = document.getElementById('inp-health').value || 'No especificada';
+      document.getElementById('val-conditions').textContent = document.getElementById('inp-conditions').value || 'Sin condiciones declaradas';
+      document.getElementById('val-contact-name').textContent = document.getElementById('inp-contact-name').value;
+      document.getElementById('val-contact-rel').textContent = document.getElementById('inp-contact-rel').value;
+      const ph = document.getElementById('inp-contact-phone').value;
+      document.getElementById('val-contact-phone').textContent = ph;
+      document.getElementById('link-call-contact').href = 'tel:' + ph;
+      document.getElementById('val-bike-model').textContent = document.getElementById('inp-bike-model').value;
+      const pl = document.getElementById('inp-bike-plate').value.toUpperCase();
+      document.getElementById('val-bike-plate').textContent = pl;
+      document.getElementById('val-bike-plate-badge').textContent = pl;
+      document.getElementById('val-bike-ins').textContent = document.getElementById('inp-bike-ins').value;
+      document.getElementById('val-bike-policy').textContent = document.getElementById('inp-bike-policy').value;
+
+      switchScenario('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function openPilotLogin() {
+      document.getElementById('modal-login').classList.remove('hidden');
+    }
+
+    function closePilotLogin() {
+      document.getElementById('modal-login').classList.add('hidden');
+    }
+
+    function handleModalLogin(e) {
+      e.preventDefault();
+      closePilotLogin();
+      document.getElementById('form-badge').textContent = 'Modo Edición del Piloto Autenticado';
+      document.getElementById('form-title').textContent = 'Actualizar Datos Médicos y Vehículo (USH-0001)';
+      switchScenario('unclaimed');
+    }
+
+    function renderBatchList() {
+      const domain = document.getElementById('batch-domain').value;
+      const prefix = (document.getElementById('batch-prefix').value || 'USH').toUpperCase();
+      const count = Math.min(50, Math.max(1, parseInt(document.getElementById('batch-count').value || '6', 10)));
+      const grid = document.getElementById('batch-grid');
+      grid.innerHTML = '';
+
+      for (let i = 1; i <= count; i++) {
+        const code = `${prefix}-${String(i).padStart(4, '0')}`;
+        const fullUrl = `${domain}${code}`;
+        const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&ecc=M&margin=1&data=${encodeURIComponent(fullUrl)}`;
+        const card = document.createElement('div');
+        card.className = 'bg-[#131b2e] border border-slate-800 rounded-2xl p-3 text-center space-y-2';
+        card.innerHTML = `
+          <div class="bg-white p-2 rounded-xl inline-block">
+            <img src="${qrApi}" alt="${code}" class="w-28 h-28 mx-auto" loading="lazy" />
+          </div>
+          <p class="font-mono text-xs font-black text-white">${code}</p>
+          <p class="text-[10px] text-slate-400 truncate">${fullUrl}</p>
+        `;
+        grid.appendChild(card);
+      }
+    }
+  </script>
+</body>
+</html>

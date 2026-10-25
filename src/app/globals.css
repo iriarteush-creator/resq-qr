@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --resq-orange: #ff5500;
+  --resq-red: #dc2626;
+  --resq-dark: #0b0f17;
+  --resq-card: #131b2e;
+}
+
+body {
+  background-color: var(--resq-dark);
+  color: #f8fafc;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Validación nativa moderna (:user-invalid) sin ruido antes de interactuar */
+input:user-invalid,
+select:user-invalid,
+textarea:user-invalid {
+  border-color: #ef4444;
+  outline-color: #ef4444;
+}
+
+input:user-valid {
+  border-color: #22c55e;
+}
