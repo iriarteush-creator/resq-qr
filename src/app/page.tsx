@@ -79,6 +79,15 @@ export default function HomePage() {
               </p>
             </Link>
           </div>
+
+          <div className="pt-2">
+            <Link
+              href="/lotes"
+              className="block w-full text-center py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold uppercase tracking-wider text-orange-400 transition"
+            >
+              🖨️ Abrir Generador de Códigos QR reales (SVG para Bambu Lab / Escaneo de Prueba)
+            </Link>
+          </div>
         </section>
       </div>
 

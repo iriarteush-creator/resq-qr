@@ -16,6 +16,7 @@ export default function QrEmergencyPage({
   const [lang, setLang] = useState<Lang>('es');
   const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -31,28 +32,42 @@ export default function QrEmergencyPage({
 
   const t = TRANSLATIONS[lang];
 
-  // Cargar datos del QR (desde Supabase o LocalStorage/Demo)
+  // Cargar datos del QR desde Supabase en tiempo real
   useEffect(() => {
     async function loadQrProfile() {
       setLoading(true);
 
-      // 1. Intentar desde LocalStorage si el usuario ya editó en modo demo
-      const savedLocal = localStorage.getItem(`resq_profile_${code}`);
-      if (savedLocal) {
-        setProfile(JSON.parse(savedLocal));
-        setLoading(false);
-        return;
-      }
-
-      // 2. Si Supabase está configurado, consultar en tiempo real
       if (isSupabaseConfigured && supabase) {
         const { data: tagData } = await supabase
           .from('qr_tags')
           .select('code, status')
           .eq('code', code)
-          .single();
+          .maybeSingle();
+
+        // Si existe una ficha guardada en rider_profiles para este QR, mostrarla
+        const { data: riderData } = await supabase
+          .from('rider_profiles')
+          .select('*')
+          .eq('qr_code', code)
+          .maybeSingle();
+
+        if (riderData) {
+          setProfile({
+            ...riderData,
+            status: 'active',
+          });
+          setLoading(false);
+          return;
+        }
 
         if (tagData && tagData.status === 'unclaimed') {
+          const savedLocal = localStorage.getItem(`resq_profile_${code}`);
+          if (savedLocal) {
+            setProfile(JSON.parse(savedLocal));
+            setLoading(false);
+            return;
+          }
+
           setProfile({
             qr_code: code,
             status: 'unclaimed',
@@ -69,21 +84,16 @@ export default function QrEmergencyPage({
           setLoading(false);
           return;
         }
-
-        const { data: riderData } = await supabase
-          .from('rider_profiles')
-          .select('*')
-          .eq('qr_code', code)
-          .single();
-
-        if (riderData) {
-          setProfile({ ...riderData, status: tagData?.status || 'active' });
-          setLoading(false);
-          return;
-        }
       }
 
-      // 3. Fallback a perfiles Demo (USH-0001 activo, cualquier otro nuevo como virgen de blíster)
+      // Fallback LocalStorage o Demo
+      const savedLocal = localStorage.getItem(`resq_profile_${code}`);
+      if (savedLocal) {
+        setProfile(JSON.parse(savedLocal));
+        setLoading(false);
+        return;
+      }
+
       const fallback = DEMO_PROFILES[code] || {
         qr_code: code,
         status: 'unclaimed',
@@ -103,6 +113,34 @@ export default function QrEmergencyPage({
 
     loadQrProfile();
   }, [code]);
+
+  // Compresión liviana de foto de la moto tomada desde el celular (<120KB para carga rápida en 3G)
+  const handleBikePhotoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 800;
+        const scale = Math.min(1, maxW / img.width);
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          setProfile({ ...profile, bike_photo_url: compressedDataUrl });
+        }
+      };
+      if (typeof ev.target?.result === 'string') {
+        img.src = ev.target.result;
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Función para capturar ubicación GPS del socorrista y enviar por WhatsApp o SMS
   const handleSendLocation = (channel: 'whatsapp' | 'sms') => {
@@ -155,51 +193,95 @@ export default function QrEmergencyPage({
     );
   };
 
-  // Guardar activación o edición del perfil
+  // Guardar activación o edición del perfil en Supabase
   const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!profile) return;
+    setSaving(true);
+    setAuthError('');
 
     const updatedProfile: RiderProfile = {
       ...profile,
       status: 'active',
     };
 
-    // Guardar en LocalStorage para persistencia inmediata en prototipo
+    // Guardar respaldo local inmediato
     localStorage.setItem(`resq_profile_${code}`, JSON.stringify(updatedProfile));
     if (email) {
       localStorage.setItem(`resq_owner_${code}`, email.toLowerCase().trim());
     }
 
-    // Si Supabase está activo, guardar en la nube
     if (isSupabaseConfigured && supabase) {
-      if (profile.status === 'unclaimed' && email && password) {
-        const { data: authData, error: signUpErr } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (signUpErr) {
-          setAuthError(signUpErr.message);
-          return;
+      try {
+        let userId: string | undefined;
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        userId = sessionData.session?.user?.id;
+
+        if (!userId && email && password) {
+          // Intentar crear cuenta o iniciar sesión si el piloto ya tenía otro llavero
+          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+          });
+
+          if (signUpErr && signUpErr.message.toLowerCase().includes('already registered')) {
+            const { data: signInData, error: signInErr } =
+              await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+              });
+            if (signInErr) {
+              setAuthError('Ese correo ya existe. Ingresa tu contraseña correcta.');
+              setSaving(false);
+              return;
+            }
+            userId = signInData.user?.id;
+          } else if (signUpErr) {
+            setAuthError(signUpErr.message);
+            setSaving(false);
+            return;
+          } else {
+            userId = signUpData.user?.id;
+          }
         }
-        const userId = authData.user?.id;
+
         if (userId) {
+          // 1. Asegurar que el QR exista en qr_tags y pasarlo a 'active'
           await supabase
             .from('qr_tags')
-            .update({ status: 'active', owner_id: userId, claimed_at: new Date().toISOString() })
+            .update({
+              status: 'active',
+              owner_id: userId,
+              claimed_at: new Date().toISOString(),
+            })
             .eq('code', code);
 
-          await supabase.from('rider_profiles').upsert({
-            ...updatedProfile,
-            owner_id: userId,
-          });
+          // 2. Guardar o actualizar los datos en rider_profiles (sin el campo 'status' que pertenece a qr_tags)
+          const { status: _ignoredStatus, ...dbRecord } = updatedProfile;
+          const { error: upsertErr } = await supabase.from('rider_profiles').upsert(
+            {
+              ...dbRecord,
+              qr_code: code,
+              owner_id: userId,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'qr_code' }
+          );
+
+          if (upsertErr) {
+            console.warn('Aviso al sincronizar con Supabase:', upsertErr.message);
+          }
         }
+      } catch (err) {
+        console.warn('Guardado en modo local de respaldo:', err);
       }
     }
 
     setProfile(updatedProfile);
     setIsEditing(false);
     setShowLoginModal(false);
+    setSaving(false);
   };
 
   // Verificar login del piloto para editar un QR ya activado
@@ -208,16 +290,16 @@ export default function QrEmergencyPage({
     setAuthError('');
 
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
       if (error) {
-        setAuthError('Credenciales inválidas. Verifica tu email y contraseña.');
-        return;
-      }
-    } else {
-      const savedOwner = localStorage.getItem(`resq_owner_${code}`);
-      if (savedOwner && savedOwner !== email.toLowerCase().trim()) {
-        setAuthError('Este QR fue activado con otro correo electrónico.');
-        return;
+        const savedOwner = localStorage.getItem(`resq_owner_${code}`);
+        if (!savedOwner || savedOwner !== email.toLowerCase().trim()) {
+          setAuthError('Credenciales inválidas. Verifica tu email y contraseña.');
+          return;
+        }
       }
     }
 
@@ -249,7 +331,7 @@ export default function QrEmergencyPage({
           <div className="max-w-xl mx-auto flex items-center justify-between">
             <div>
               <p className="text-[10px] font-extrabold tracking-widest text-[#ff5500] uppercase">
-                EXPEDITION SAFETY & MEDICAL SOS SYSTEM • USHUAIA
+                EXPEDITION SAFETY &amp; MEDICAL SOS SYSTEM • USHUAIA
               </p>
               <div className="flex items-baseline gap-2">
                 <h1 className="text-2xl font-black tracking-tight text-white">ResQ</h1>
@@ -273,10 +355,14 @@ export default function QrEmergencyPage({
         <div className="max-w-xl mx-auto px-4 pt-6">
           <div className="bg-gradient-to-r from-orange-600/20 to-red-600/10 border border-orange-500/40 rounded-2xl p-4 mb-6">
             <span className="inline-block text-[11px] font-bold uppercase tracking-wider bg-[#ff5500] text-white px-2.5 py-0.5 rounded mb-2">
-              {profile.status === 'unclaimed' ? 'QR Virgen · Activación Libre' : 'Modo Edición del Piloto'}
+              {profile.status === 'unclaimed'
+                ? 'QR Virgen · Activación Libre'
+                : 'Modo Edición del Piloto'}
             </span>
             <h2 className="text-xl font-extrabold text-white">
-              {profile.status === 'unclaimed' ? t.unclaimedTitle : 'Actualizar Ficha Médica y Vehículo'}
+              {profile.status === 'unclaimed'
+                ? t.unclaimedTitle
+                : 'Actualizar Ficha Médica y Vehículo'}
             </h2>
             <p className="text-xs text-slate-300 mt-1">
               {profile.status === 'unclaimed'
@@ -284,6 +370,12 @@ export default function QrEmergencyPage({
                 : 'Modifica tus datos médicos, contacto de emergencia o seguro. Los cambios se actualizan al instante en tu QR.'}
             </p>
           </div>
+
+          {authError && (
+            <div className="mb-4 rounded-xl bg-red-950/80 border border-red-500 p-3 text-xs font-bold text-red-200">
+              ⚠️ {authError}
+            </div>
+          )}
 
           <form onSubmit={handleSaveProfile} className="space-y-6">
             {/* Paso 1: Cuenta (solo al activar por primera vez) */}
@@ -322,7 +414,8 @@ export default function QrEmergencyPage({
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  🔒 Este QR quedará bloqueado a tu cuenta. Nadie más podrá modificarlo sin tu clave.
+                  🔒 Este QR quedará bloqueado a tu cuenta. Nadie más podrá modificarlo sin tu
+                  clave.
                 </p>
               </section>
             )}
@@ -381,7 +474,9 @@ export default function QrEmergencyPage({
                       setProfile({
                         ...profile,
                         allergies: e.target.value,
-                        has_medical_condition: Boolean(e.target.value || profile.medical_conditions),
+                        has_medical_condition: Boolean(
+                          e.target.value || profile.medical_conditions
+                        ),
                       })
                     }
                     placeholder="Ej: Penicilina, Ibuprofeno, Ninguna"
@@ -509,7 +604,7 @@ export default function QrEmergencyPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
                     Compañía de Seguro
@@ -538,26 +633,35 @@ export default function QrEmergencyPage({
                     className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    URL Foto de la Moto
-                  </label>
-                  <input
-                    type="url"
-                    value={profile.bike_photo_url || ''}
-                    onChange={(e) => setProfile({ ...profile, bike_photo_url: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm text-white"
+              </div>
+
+              {/* Subir Foto de la Moto desde el Celular */}
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-300">
+                  📸 Foto del Vehículo (Tomar foto o elegir de tu galería)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBikePhotoFile}
+                  className="block w-full text-xs text-slate-300 file:mr-3 file:rounded-xl file:border-0 file:bg-orange-500/20 file:px-3.5 file:py-2 file:text-xs file:font-bold file:text-orange-300 hover:file:bg-orange-500/30"
+                />
+                {profile.bike_photo_url && (
+                  <img
+                    src={profile.bike_photo_url}
+                    alt="Vista previa moto"
+                    className="h-32 w-full object-cover rounded-xl border border-slate-700 mt-2"
                   />
-                </div>
+                )}
               </div>
             </section>
 
             <button
               type="submit"
-              className="w-full py-4 rounded-2xl bg-[#ff5500] hover:bg-orange-600 text-white font-black text-base uppercase tracking-wider shadow-lg shadow-orange-600/30 transition"
+              disabled={saving}
+              className="w-full py-4 rounded-2xl bg-[#ff5500] hover:bg-orange-600 disabled:opacity-50 text-white font-black text-base uppercase tracking-wider shadow-lg shadow-orange-600/30 transition"
             >
-              {t.activateQrBtn}
+              {saving ? 'Guardando Ficha ResQ...' : t.activateQrBtn}
             </button>
           </form>
         </div>
@@ -620,9 +724,7 @@ export default function QrEmergencyPage({
             <h1 className="text-2xl font-black text-white leading-tight">{profile.full_name}</h1>
             <p className="text-xs text-slate-400 mt-0.5">
               País: <strong className="text-slate-200">{profile.nationality}</strong>
-              {profile.doc_last_digits && (
-                <span> · Doc: ***{profile.doc_last_digits}</span>
-              )}
+              {profile.doc_last_digits && <span> · Doc: ***{profile.doc_last_digits}</span>}
             </p>
           </div>
 
@@ -634,7 +736,7 @@ export default function QrEmergencyPage({
           </div>
         </section>
 
-        {/* c) ENVIAR UBICACIÓN GPS AL CONTACTO DE EMERGENCIA (WhatsApp + SMS 2G) */}
+        {/* c) ENVIAR UBICACIÓN DE EMERGENCIA AL CONTACTO (WhatsApp + SMS 2G) */}
         <section className="bg-gradient-to-br from-orange-600/25 to-red-600/20 border-2 border-[#ff5500] rounded-2xl p-4 space-y-3">
           <div>
             <h2 className="text-sm font-black uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
