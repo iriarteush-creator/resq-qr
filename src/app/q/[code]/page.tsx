@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, use } from 'react';
 import { TRANSLATIONS, Lang } from '@/lib/i18n';
-import { DEMO_PROFILES, RiderProfile, BloodType } from '@/lib/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { RiderProfile, BloodType } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
 
 const SITE_URL = 'https://resq-qr.vercel.app';
 
@@ -39,35 +39,39 @@ export default function QrEmergencyPage({
 
   const t = TRANSLATIONS[lang];
 
-  // Función auxiliar para guardar la ficha en Supabase de forma 100% segura (sin fallar por FK de owner_id no confirmado)
-  const syncProfileToSupabase = async (
-    prof: RiderProfile,
-    confirmedUserId?: string
+  // Guardar ficha directamente en Supabase con mapeo explícito de columnas
+  const saveProfileToDatabase = async (
+    prof: RiderProfile
   ): Promise<{ ok: boolean; error?: string }> => {
-    if (!isSupabaseConfigured || !supabase) return { ok: true, error: undefined };
-
-    // 1. Primero activar el QR en qr_tags (obligatorio antes de insertar en rider_profiles por la política RLS)
-    const { error: tagErr } = await supabase
+    // 1. Asegurar que el código exista en qr_tags y pasarlo a 'active'
+    const { data: existingTag } = await supabase
       .from('qr_tags')
-      .update({
-        status: 'active',
-        ...(confirmedUserId ? { owner_id: confirmedUserId } : {}),
-        claimed_at: new Date().toISOString(),
-      })
-      .eq('code', code);
+      .select('code')
+      .eq('code', code)
+      .maybeSingle();
 
-    if (tagErr) {
-      // Reintentar sin owner_id por si el usuario aún no confirmó el email en auth.users
-      await supabase
+    if (!existingTag) {
+      await supabase.from('qr_tags').insert({
+        code,
+        batch_name: 'PROTOTIPO-01',
+        status: 'active',
+        claimed_at: new Date().toISOString(),
+      });
+    } else {
+      const { error: tagUpdateErr } = await supabase
         .from('qr_tags')
         .update({
           status: 'active',
           claimed_at: new Date().toISOString(),
         })
         .eq('code', code);
+
+      if (tagUpdateErr) {
+        return { ok: false, error: `Error al activar tag QR: ${tagUpdateErr.message}` };
+      }
     }
 
-    // 2. Empaquetar campos adicionales también en JSON de respaldo
+    // 2. Empaquetar campos extra también en JSON de respaldo
     const extraJson = JSON.stringify({
       observations: prof.observations || '',
       emergency_contact_3_name: prof.emergency_contact_3_name || '',
@@ -76,137 +80,110 @@ export default function QrEmergencyPage({
       owner_email: prof.owner_email || '',
     });
 
-    const { status: _ignoredStatus, ...dbRecordV2 } = prof;
-
-    // 3. Guardar en rider_profiles (sin owner_id si no está confirmado para evitar error FK 23503)
-    const payloadV2 = {
-      ...dbRecordV2,
+    // 3. Construir objeto únicamente con las columnas válidas de la tabla rider_profiles
+    const dbRow = {
       qr_code: code,
-      ...(confirmedUserId ? { owner_id: confirmedUserId } : { owner_id: null }),
+      owner_id: null,
+      owner_email: prof.owner_email || null,
+      full_name: prof.full_name,
+      nationality: prof.nationality || 'AR',
+      rider_photo_url: prof.rider_photo_url || null,
+      blood_type: prof.blood_type || 'O+',
+      has_medical_condition: Boolean(
+        prof.allergies || prof.medical_conditions || prof.medications
+      ),
+      allergies: prof.allergies || null,
+      medical_conditions: prof.medical_conditions || null,
+      medications: prof.medications || null,
+      health_insurance: prof.health_insurance || null,
+      health_insurance_number: prof.health_insurance_number || null,
+      observations: prof.observations || null,
       medical_notes_pt: extraJson,
+      emergency_contact_1_name: prof.emergency_contact_1_name,
+      emergency_contact_1_relation: prof.emergency_contact_1_relation,
+      emergency_contact_1_phone: prof.emergency_contact_1_phone,
+      emergency_contact_2_name: prof.emergency_contact_2_name || null,
+      emergency_contact_2_relation: prof.emergency_contact_2_relation || null,
+      emergency_contact_2_phone: prof.emergency_contact_2_phone || null,
+      emergency_contact_3_name: prof.emergency_contact_3_name || null,
+      emergency_contact_3_relation: prof.emergency_contact_3_relation || null,
+      emergency_contact_3_phone: prof.emergency_contact_3_phone || null,
+      bike_brand_model: prof.bike_brand_model,
+      bike_plate: prof.bike_plate,
+      bike_photo_url: prof.bike_photo_url || null,
+      bike_insurance_company: prof.bike_insurance_company || null,
+      bike_insurance_policy: prof.bike_insurance_policy || null,
+      bike_insurance_phone: prof.bike_insurance_phone || null,
       updated_at: new Date().toISOString(),
     };
 
-    const { error: upsertErrV2 } = await supabase
+    const { error: upsertErr } = await supabase
       .from('rider_profiles')
-      .upsert(payloadV2, { onConflict: 'qr_code' });
+      .upsert(dbRow, { onConflict: 'qr_code' });
 
-    if (upsertErrV2) {
-      // Reintento forzando owner_id: null por si el UUID era de un signUp pendiente de confirmación
-      const { error: retryErr } = await supabase
-        .from('rider_profiles')
-        .upsert({ ...payloadV2, owner_id: null }, { onConflict: 'qr_code' });
-
-      if (retryErr) {
-        return { ok: false, error: retryErr.message };
-      }
+    if (upsertErr) {
+      return { ok: false, error: upsertErr.message };
     }
 
     return { ok: true };
   };
 
-  // Detectar si viene desde el link de confirmación de email (?verified=1)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('verified') === '1') {
         setEmailVerifiedBanner(true);
       }
+      // Limpiar cualquier caché viejo de pruebas anteriores en este navegador
+      localStorage.removeItem(`resq_profile_${code}`);
     }
-  }, []);
+  }, [code]);
 
-  // Cargar datos del QR desde Supabase en tiempo real
+  // Cargar datos del QR EXCLUSIVAMENTE desde Supabase (única fuente de verdad compartida con /admin)
   useEffect(() => {
     async function loadQrProfile() {
       setLoading(true);
 
-      if (isSupabaseConfigured && supabase) {
-        const { data: riderData } = await supabase
-          .from('rider_profiles')
-          .select('*')
-          .eq('qr_code', code)
-          .maybeSingle();
+      const { data: riderData } = await supabase
+        .from('rider_profiles')
+        .select('*')
+        .eq('qr_code', code)
+        .maybeSingle();
 
-        if (riderData) {
-          let extraMeta: Partial<RiderProfile> = {};
-          if (riderData.medical_notes_pt && riderData.medical_notes_pt.startsWith('{')) {
-            try {
-              extraMeta = JSON.parse(riderData.medical_notes_pt);
-            } catch {
-              // Ignorar si no es JSON
-            }
-          }
-
-          const merged: RiderProfile = {
-            ...riderData,
-            observations: riderData.observations || extraMeta.observations || '',
-            emergency_contact_3_name:
-              riderData.emergency_contact_3_name || extraMeta.emergency_contact_3_name || '',
-            emergency_contact_3_relation:
-              riderData.emergency_contact_3_relation ||
-              extraMeta.emergency_contact_3_relation ||
-              '',
-            emergency_contact_3_phone:
-              riderData.emergency_contact_3_phone || extraMeta.emergency_contact_3_phone || '',
-            status: 'active',
-          };
-          setProfile(merged);
-          if (merged.emergency_contact_2_name || merged.emergency_contact_3_name) {
-            setShowExtraContacts(true);
-          }
-          setLoading(false);
-          return;
-        }
-
-        // Si en Supabase aún no está en rider_profiles pero el celular ya lo tenía en LocalStorage
-        // (y no es la ficha demo ficticia de Martín Alejandro Gómez), sincronizarlo automáticamente a Supabase!
-        const savedLocal = localStorage.getItem(`resq_profile_${code}`);
-        if (savedLocal) {
+      if (riderData && riderData.full_name) {
+        let extraMeta: Partial<RiderProfile> = {};
+        if (riderData.medical_notes_pt && riderData.medical_notes_pt.startsWith('{')) {
           try {
-            const parsedLocal: RiderProfile = JSON.parse(savedLocal);
-            if (
-              parsedLocal &&
-              parsedLocal.full_name &&
-              parsedLocal.full_name !== 'Martín Alejandro Gómez'
-            ) {
-              await syncProfileToSupabase(parsedLocal);
-              setProfile({ ...parsedLocal, status: 'active' });
-              setLoading(false);
-              return;
-            } else if (parsedLocal?.full_name === 'Martín Alejandro Gómez') {
-              localStorage.removeItem(`resq_profile_${code}`);
-            }
+            extraMeta = JSON.parse(riderData.medical_notes_pt);
           } catch {
-            // Continuar
+            // Ignorar
           }
         }
 
-        const { data: tagData } = await supabase
-          .from('qr_tags')
-          .select('code, status')
-          .eq('code', code)
-          .maybeSingle();
-
-        if (tagData) {
-          setProfile({
-            qr_code: code,
-            status: 'unclaimed',
-            full_name: '',
-            nationality: 'AR',
-            blood_type: 'O+',
-            has_medical_condition: false,
-            emergency_contact_1_name: '',
-            emergency_contact_1_relation: '',
-            emergency_contact_1_phone: '',
-            bike_brand_model: '',
-            bike_plate: '',
-          });
-          setLoading(false);
-          return;
+        const merged: RiderProfile = {
+          ...riderData,
+          observations: riderData.observations || extraMeta.observations || '',
+          emergency_contact_3_name:
+            riderData.emergency_contact_3_name || extraMeta.emergency_contact_3_name || '',
+          emergency_contact_3_relation:
+            riderData.emergency_contact_3_relation ||
+            extraMeta.emergency_contact_3_relation ||
+            '',
+          emergency_contact_3_phone:
+            riderData.emergency_contact_3_phone || extraMeta.emergency_contact_3_phone || '',
+          owner_email: riderData.owner_email || extraMeta.owner_email || '',
+          status: 'active',
+        };
+        setProfile(merged);
+        if (merged.emergency_contact_2_name || merged.emergency_contact_3_name) {
+          setShowExtraContacts(true);
         }
+        setLoading(false);
+        return;
       }
 
-      const fallback = DEMO_PROFILES[code] || {
+      // Si no hay perfil en rider_profiles, el QR está virgen (unclaimed) y listo para dar de alta
+      setProfile({
         qr_code: code,
         status: 'unclaimed',
         full_name: '',
@@ -218,8 +195,7 @@ export default function QrEmergencyPage({
         emergency_contact_1_phone: '',
         bike_brand_model: '',
         bike_plate: '',
-      };
-      setProfile(fallback);
+      });
       setLoading(false);
     }
 
@@ -322,55 +298,36 @@ export default function QrEmergencyPage({
       status: 'active',
     };
 
-    // Guardar respaldo local
-    localStorage.setItem(`resq_profile_${code}`, JSON.stringify(updatedProfile));
     if (email) {
       localStorage.setItem(`resq_owner_${code}`, email.toLowerCase().trim());
     }
 
-    let confirmedUserId: string | undefined;
+    // 1. Primero guardar la ficha y activar el QR en Supabase
+    const syncRes = await saveProfileToDatabase(updatedProfile);
+    if (!syncRes.ok) {
+      setAuthError(`Error al guardar en la base de datos: ${syncRes.error}`);
+      setSaving(false);
+      return;
+    }
 
-    if (isSupabaseConfigured && supabase) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      confirmedUserId = sessionData.session?.user?.id;
-
-      if (!confirmedUserId && email && password) {
-        // Primero intentar iniciar sesión por si el piloto ya creó su usuario antes
-        const { data: signInData } = await supabase.auth.signInWithPassword({
+    // 2. Registrar o autenticar el correo del piloto en Supabase Auth
+    if (email && password) {
+      try {
+        const redirectUrl = `${SITE_URL}/q/${encodeURIComponent(code)}?verified=1`;
+        const { data: signUpData } = await supabase.auth.signUp({
           email: email.trim(),
           password,
+          options: {
+            emailRedirectTo: redirectUrl,
+          },
         });
-
-        if (signInData?.session?.user?.id) {
-          confirmedUserId = signInData.session.user.id;
-        } else {
-          // Si no tenía sesión, registrar usuario con redirección a https://resq-qr.vercel.app
-          const redirectUrl = `${SITE_URL}/q/${encodeURIComponent(code)}?verified=1`;
-          const { data: signUpData } = await supabase.auth.signUp({
-            email: email.trim(),
-            password,
-            options: {
-              emailRedirectTo: redirectUrl,
-            },
-          });
-
-          if (signUpData?.session?.user?.id) {
-            confirmedUserId = signUpData.session.user.id;
-          } else {
-            setActivationNotice(
-              '¡Ficha activada en la nube! Si es la primera vez que usas este correo, revisa tu bandeja para confirmar tu email.'
-            );
-          }
+        if (!signUpData?.session) {
+          setActivationNotice(
+            '✅ ¡Tu llavero QR ya quedó ACTIVO en el sistema! Si es tu primera vez, te enviamos un correo de bienvenida.'
+          );
         }
-      }
-
-      const syncRes = await syncProfileToSupabase(updatedProfile, confirmedUserId);
-      if (!syncRes.ok) {
-        setAuthError(
-          `No se pudo sincronizar con la nube (${syncRes.error}). Verifica haber ejecutado el SQL de actualización en Supabase.`
-        );
-        setSaving(false);
-        return;
+      } catch {
+        // El QR ya quedó activo en la base de datos
       }
     }
 
@@ -385,22 +342,20 @@ export default function QrEmergencyPage({
     e.preventDefault();
     setAuthError('');
 
-    if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (error) {
-        const savedOwner = localStorage.getItem(`resq_owner_${code}`);
-        const matchesEmail =
-          (profile?.owner_email &&
-            profile.owner_email.toLowerCase() === email.toLowerCase().trim()) ||
-          (savedOwner && savedOwner === email.toLowerCase().trim());
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) {
+      const savedOwner = localStorage.getItem(`resq_owner_${code}`);
+      const matchesEmail =
+        (profile?.owner_email &&
+          profile.owner_email.toLowerCase() === email.toLowerCase().trim()) ||
+        (savedOwner && savedOwner === email.toLowerCase().trim());
 
-        if (!matchesEmail) {
-          setAuthError('Credenciales inválidas o correo aún sin confirmar.');
-          return;
-        }
+      if (!matchesEmail) {
+        setAuthError('Credenciales inválidas. Verifica el correo con el que activaste este QR.');
+        return;
       }
     }
 
@@ -419,14 +374,12 @@ export default function QrEmergencyPage({
       return;
     }
 
-    if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${SITE_URL}/reset-password?code=${encodeURIComponent(code)}`,
-      });
-      if (error) {
-        setAuthError(error.message);
-        return;
-      }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${SITE_URL}/reset-password?code=${encodeURIComponent(code)}`,
+    });
+    if (error) {
+      setAuthError(error.message);
+      return;
     }
 
     setRecoverSuccess(
@@ -952,7 +905,7 @@ export default function QrEmergencyPage({
               disabled={saving}
               className="w-full py-4 rounded-2xl bg-[#ff5500] hover:bg-orange-600 disabled:opacity-50 text-white font-black text-base uppercase tracking-wider shadow-lg shadow-orange-600/30 transition"
             >
-              {saving ? 'Guardando Ficha ResQ...' : t.activateQrBtn}
+              {saving ? 'Guardando Ficha ResQ en el Servidor...' : t.activateQrBtn}
             </button>
           </form>
         </div>
