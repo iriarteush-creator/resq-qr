@@ -80,12 +80,18 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              href="/admin"
+              className="block w-full text-center py-3 rounded-xl bg-[#ff5500]/15 hover:bg-[#ff5500]/25 border border-[#ff5500]/50 text-xs font-black uppercase tracking-wider text-orange-300 transition"
+            >
+              🛡️ Panel Administrador (QRs Activos y No Activos)
+            </Link>
             <Link
               href="/lotes"
-              className="block w-full text-center py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold uppercase tracking-wider text-orange-400 transition"
+              className="block w-full text-center py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300 transition"
             >
-              🖨️ Abrir Generador de Códigos QR reales (SVG para Bambu Lab / Escaneo de Prueba)
+              🖨️ Generador de SVGs para Impresión 3D
             </Link>
           </div>
         </section>
