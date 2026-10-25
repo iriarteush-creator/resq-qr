@@ -4,443 +4,551 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function BlisterGeneratorPage() {
-  const [edition, setEdition] = useState<'moto' | 'explorer'>('moto');
-  const [code1, setCode1] = useState('USH-0001');
-  const [code2, setCode2] = useState('USH-0002');
+  const [cleanPrint, setCleanPrint] = useState(false);
 
-  const isExp = edition === 'explorer';
-
-  const renderFrontCard = (serialCode: string) => (
+  const renderFrontCard = () => (
     <div
-      className="relative flex flex-col justify-between overflow-hidden bg-[#18191A] text-[#F2F4F7]"
+      className="relative overflow-hidden bg-[#1E2023] text-[#F4F6F8]"
       style={{
-        width: '92mm',
-        height: '138mm',
-        borderRadius: '5mm',
-        border: '0.35mm dashed #64748b',
+        width: '90mm',
+        height: '130mm',
+        borderRadius: '5.5mm',
+        border: '0.25mm solid #334155',
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact',
       }}
     >
-      {/* Fondo técnico radial */}
-      <div
-        className="pointer-events-none absolute inset-0"
+      {/* Gráfica Vectorial HUD Exacta al Diseño de Tienda */}
+      <svg
+        viewBox="0 0 92 138"
         style={{
-          background:
-            'radial-gradient(circle at 50% 52%, rgba(255,85,0,0.16), transparent 64%)',
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
         }}
-      />
+      >
+        {/* Troquel Colgador Europeo (Eurohole) */}
+        <path
+          d="M 33 7.5 H 41.5 A 3.5 3.5 0 0 1 49.5 7.5 H 59 A 2 2 0 0 1 61 9.5 V 11 A 2 2 0 0 1 59 13 H 33 A 2 2 0 0 1 31 11 V 9.5 A 2 2 0 0 1 33 7.5 Z"
+          fill="#ffffff"
+          stroke="#475569"
+          strokeWidth="0.25"
+        />
 
-      {/* Bloque superior: Eurohole + Banda Naranja + Logo */}
-      <div className="relative z-10">
+        {/* Líneas técnicas superiores con esquina a 45° */}
+        <polyline
+          points="5.5,19 5.5,11.5 9.5,7.5 14,7.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+        <polyline
+          points="86.5,19 86.5,11.5 82.5,7.5 78,7.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+
+        {/* Franjas sólidas naranjas laterales */}
+        <path d="M 0 21.5 H 21.5 C 19.2 26.5, 19.2 31.5, 21.5 36.5 H 0 Z" fill="#FF5500" />
+        <path d="M 92 21.5 H 70.5 C 72.8 26.5, 72.8 31.5, 70.5 36.5 H 92 Z" fill="#FF5500" />
+
+        {/* Arcos parentéticos naranjas que enmarcan el logo ResQ central */}
+        <path
+          d="M 23.2 21.2 C 20.5 26.5, 20.5 31.5, 23.2 36.8"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 68.8 21.2 C 71.5 26.5, 71.5 31.5, 68.8 36.8"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.8"
+          strokeLinecap="round"
+        />
+
+        {/* Reglas técnicas laterales con marcas de graduación encuadrando TAG SOS / FICHA MEDICA */}
+        <line x1="5.5" y1="40.5" x2="5.5" y2="51.5" stroke="#FF5500" strokeWidth="0.55" />
+        <line x1="5.5" y1="40.5" x2="9.2" y2="40.5" stroke="#FF5500" strokeWidth="0.55" />
+        <line x1="5.5" y1="42.7" x2="8.5" y2="42.7" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="5.5" y1="44.9" x2="8.5" y2="44.9" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="5.5" y1="47.1" x2="8.5" y2="47.1" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="5.5" y1="49.3" x2="8.5" y2="49.3" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="5.5" y1="51.5" x2="9.2" y2="51.5" stroke="#FF5500" strokeWidth="0.55" />
+
+        <line x1="86.5" y1="40.5" x2="86.5" y2="51.5" stroke="#FF5500" strokeWidth="0.55" />
+        <line x1="82.8" y1="40.5" x2="86.5" y2="40.5" stroke="#FF5500" strokeWidth="0.55" />
+        <line x1="83.5" y1="42.7" x2="86.5" y2="42.7" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="83.5" y1="44.9" x2="86.5" y2="44.9" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="83.5" y1="47.1" x2="86.5" y2="47.1" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="83.5" y1="49.3" x2="86.5" y2="49.3" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="82.8" y1="51.5" x2="86.5" y2="51.5" stroke="#FF5500" strokeWidth="0.55" />
+
+        {/* Líneas horizontales superior e inferior de TAG SOS / FICHA MEDICA */}
+        <line x1="11.5" y1="42.2" x2="80.5" y2="42.2" stroke="#FF5500" strokeWidth="0.45" />
+        <line x1="11.5" y1="49.8" x2="80.5" y2="49.8" stroke="#FF5500" strokeWidth="0.45" />
+
+        {/* Líneas laterales del contenedor del blíster */}
+        <polyline
+          points="8.5,55 5.5,55 5.5,119.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+        <polyline
+          points="83.5,55 86.5,55 86.5,119.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+
+        {/* Marco técnico inferior con chaflanes a 45° para USHUAIA PATAGONIA */}
+        <polyline
+          points="5.5,119.5 10.5,125 32.5,125 35.5,121.8 56.5,121.8 59.5,125 81.5,125 86.5,119.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+
+        {/* Esquinas exteriores inferiores dobles */}
+        <polyline
+          points="4.5,124 9.5,129.2 29,129.2"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.5"
+        />
+        <polyline
+          points="87.5,124 82.5,129.2 63,129.2"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.5"
+        />
+      </svg>
+
+      {/* Logo ResQ + MOTO EDITION */}
+      <div
+        className="absolute inset-x-0 text-center"
+        style={{ top: '20.2mm', zIndex: 2 }}
+      >
         <div
-          className="mx-auto flex items-center justify-center bg-white text-slate-400 font-bold uppercase tracking-widest"
-          style={{
-            width: '30mm',
-            height: '7.5mm',
-            marginTop: '3.5mm',
-            borderRadius: '4mm',
-            border: '0.35mm dashed #94a3b8',
-            fontSize: '5.5pt',
-          }}
+          className="font-black text-white leading-none"
+          style={{ fontSize: '25.5pt', letterSpacing: '-0.03em' }}
         >
-          Troquel Colgador
+          Res<span className="text-[#FF5500]">Q</span>
         </div>
-
         <div
-          className="bg-[#FF5500] text-white text-center font-black uppercase"
-          style={{
-            marginTop: '2.2mm',
-            padding: '1.2mm 2mm',
-            fontSize: '5.7pt',
-            letterSpacing: '0.14em',
-          }}
+          className="font-bold uppercase text-[#FF5500]"
+          style={{ fontSize: '7.6pt', letterSpacing: '0.18em', marginTop: '1.1mm' }}
         >
-          EXPEDITION SAFETY &amp; MEDICAL SOS SYSTEM
-        </div>
-
-        <div className="text-center" style={{ padding: '2.5mm 4mm 1mm 4mm' }}>
-          <div className="flex items-center justify-center" style={{ gap: '2.5mm' }}>
-            {/* Cruz Roja Médica */}
-            <div
-              className="relative inline-flex items-center justify-center bg-[#E60000]"
-              style={{
-                width: '7.5mm',
-                height: '7.5mm',
-                borderRadius: '1.5mm',
-              }}
-            >
-              <div
-                className="absolute bg-white"
-                style={{ width: '4.8mm', height: '1.8mm', borderRadius: '0.3mm' }}
-              />
-              <div
-                className="absolute bg-white"
-                style={{ width: '1.8mm', height: '4.8mm', borderRadius: '0.3mm' }}
-              />
-            </div>
-
-            <span
-              className="font-black text-white leading-none"
-              style={{ fontSize: '24pt', letterSpacing: '-0.03em' }}
-            >
-              Res<span className="text-[#FF5500]">Q</span>
-            </span>
-          </div>
-
-          <div
-            className="inline-block font-black uppercase text-[#ff7a33]"
-            style={{
-              marginTop: '1.2mm',
-              background: 'rgba(255,85,0,0.15)',
-              border: '0.35mm solid #FF5500',
-              fontSize: '6.3pt',
-              letterSpacing: '0.13em',
-              padding: '0.7mm 2.8mm',
-              borderRadius: '2mm',
-            }}
-          >
-            {isExp ? 'EXPLORER • HORIZONTAL BUMPER' : 'MOTO EDITION • CIRCULAR TOKEN'}
-          </div>
-
-          <p
-            className="font-extrabold uppercase text-[#F2F4F7]"
-            style={{ fontSize: '7pt', marginTop: '1.2mm', letterSpacing: '0.06em' }}
-          >
-            TAG SOS / FICHA MÉDICA DIGITAL
-          </p>
+          MOTO EDITION
         </div>
       </div>
 
-      {/* Zona central escala 1:1 para montar el llavero físico */}
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center">
+      {/* Subtítulo enmarcado: TAG SOS / FICHA MEDICA */}
+      <div
+        className="absolute inset-x-0 text-center"
+        style={{ top: '43.4mm', zIndex: 2 }}
+      >
         <div
-          className="flex items-center justify-center uppercase text-slate-400 font-bold"
-          style={{
-            width: '15mm',
-            height: '3.2mm',
-            border: '0.35mm dashed #94a3b8',
-            borderRadius: '1.5mm',
-            fontSize: '4.6pt',
-            marginBottom: '1.5mm',
-            background: 'rgba(255,255,255,0.04)',
-          }}
+          className="font-extrabold uppercase text-white"
+          style={{ fontSize: '9.3pt', letterSpacing: '0.05em' }}
         >
-          Pasar Argolla / Precinto
+          TAG SOS / FICHA MEDICA
         </div>
+      </div>
 
-        {!isExp ? (
-          <div
-            className="flex flex-col items-center justify-center text-center"
-            style={{
-              width: '54mm',
-              height: '54mm',
-              borderRadius: '50%',
-              border: '0.6mm dashed #FF5500',
-              background:
-                'radial-gradient(circle, rgba(255,85,0,0.12) 0%, rgba(14,16,18,0.92) 75%)',
-              padding: '4mm',
-            }}
-          >
-            <span
-              className="font-black uppercase text-[#ff7a33]"
-              style={{ fontSize: '6pt', letterSpacing: '0.06em' }}
+      {/* Eslogan: Escaneá. Asistí. Rescatá. */}
+      <div
+        className="absolute inset-x-0 text-center"
+        style={{ top: '51.6mm', zIndex: 2 }}
+      >
+        <div
+          className="font-semibold text-slate-200"
+          style={{ fontSize: '7.5pt', letterSpacing: '0.02em' }}
+        >
+          Escaneá. Asistí. Rescatá.
+        </div>
+      </div>
+
+      {/* ZONA CENTRAL PARA 1 SOLO DISPOSITIVO (58.5mm a 117.5mm) */}
+      <div
+        className="absolute flex flex-col items-center justify-center"
+        style={{
+          top: '58.5mm',
+          left: '9.5mm',
+          right: '9.5mm',
+          height: '59mm',
+          borderRadius: '4.5mm',
+          border: '0.35mm solid rgba(255,255,255,0.14)',
+          background:
+            'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.28) 100%)',
+          zIndex: 2,
+        }}
+      >
+        {!cleanPrint ? (
+          <div className="flex flex-col items-center justify-center">
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: '12mm',
+                height: '6.5mm',
+                background: '#141618',
+                border: '0.5mm solid #2d3136',
+                borderRadius: '2.5mm 2.5mm 0 0',
+                marginBottom: '-1.5mm',
+                zIndex: 3,
+              }}
             >
-              ZONA DE MONTAJE 1:1
-            </span>
-            <span className="text-slate-400" style={{ fontSize: '5.2pt', marginTop: '1mm' }}>
-              Token Circular Ø 50–54 mm
-            </span>
-            <span
-              className="font-mono font-bold text-white bg-black/60 px-2 py-0.5 rounded border border-slate-700"
-              style={{ fontSize: '6pt', marginTop: '2mm' }}
+              <div
+                style={{
+                  width: '6mm',
+                  height: '2.2mm',
+                  background: '#0e1012',
+                  borderRadius: '1mm',
+                }}
+              />
+            </div>
+
+            <div
+              className="relative flex flex-col items-center justify-between"
+              style={{
+                width: '48mm',
+                height: '48mm',
+                borderRadius: '50%',
+                background: '#18191A',
+                border: '2.6mm solid #FF5500',
+                boxShadow: '0 3mm 8mm rgba(0,0,0,0.65), inset 0 0 0 0.8mm #0e1012',
+                padding: '3.2mm',
+              }}
             >
-              ID: {serialCode}
-            </span>
+              <span
+                className="font-black text-white"
+                style={{ fontSize: '6.8pt', letterSpacing: '0.04em' }}
+              >
+                ResQ
+              </span>
+              <div
+                className="relative flex items-center justify-center"
+                style={{ width: '16mm', height: '16mm' }}
+              >
+                <div
+                  className="absolute bg-[#E60000]"
+                  style={{ width: '15.5mm', height: '5.5mm', borderRadius: '0.8mm' }}
+                />
+                <div
+                  className="absolute bg-[#E60000]"
+                  style={{ width: '5.5mm', height: '15.5mm', borderRadius: '0.8mm' }}
+                />
+              </div>
+              <span
+                className="font-extrabold text-white"
+                style={{ fontSize: '5.6pt', letterSpacing: '0.08em' }}
+              >
+                EMERGENCY ID
+              </span>
+            </div>
           </div>
         ) : (
-          <div
-            className="flex flex-col items-center justify-center text-center"
-            style={{
-              width: '64mm',
-              height: '40mm',
-              borderRadius: '5mm',
-              border: '0.6mm dashed #FF5500',
-              background:
-                'radial-gradient(circle, rgba(255,85,0,0.12) 0%, rgba(14,16,18,0.92) 75%)',
-              padding: '4mm',
-            }}
-          >
-            <span
-              className="font-black uppercase text-[#ff7a33]"
-              style={{ fontSize: '6pt', letterSpacing: '0.06em' }}
+          <div className="flex flex-col items-center justify-center">
+            <div
+              style={{
+                width: '12mm',
+                height: '2.8mm',
+                border: '0.3mm dashed #64748b',
+                borderRadius: '1mm',
+                marginBottom: '2mm',
+              }}
+            />
+            <div
+              className="flex flex-col items-center justify-center text-center"
+              style={{
+                width: '50mm',
+                height: '50mm',
+                borderRadius: '50%',
+                border: '0.4mm dashed rgba(255,85,0,0.55)',
+                padding: '4mm',
+              }}
             >
-              ZONA DE MONTAJE 1:1
-            </span>
-            <span className="text-slate-400" style={{ fontSize: '5.2pt', marginTop: '1mm' }}>
-              Explorer Bumper 64×40 mm
-            </span>
-            <span
-              className="font-mono font-bold text-white bg-black/60 px-2 py-0.5 rounded border border-slate-700"
-              style={{ fontSize: '6pt', marginTop: '1.5mm' }}
-            >
-              ID: {serialCode}
-            </span>
+              <span
+                className="font-extrabold uppercase text-[#FF5500]"
+                style={{ fontSize: '5.8pt', letterSpacing: '0.08em' }}
+              >
+                POSICIÓN 1 UNIDAD
+              </span>
+              <span className="text-slate-400" style={{ fontSize: '5pt', marginTop: '1mm' }}>
+                Centrar Llavero ResQ Aquí
+                <br />
+                (Ø 50 mm)
+              </span>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Beneficios rápidos + Pie con Eslogan Oficial */}
-      <div className="relative z-10">
+      {/* Pie Técnico: USHUAIA PATAGONIA */}
+      <div
+        className="absolute inset-x-0 text-center"
+        style={{ bottom: '6.2mm', zIndex: 2 }}
+      >
         <div
-          className="grid grid-cols-3"
-          style={{ gap: '1.5mm', padding: '0 3.5mm', marginBottom: '2mm' }}
+          className="font-black uppercase text-white leading-none"
+          style={{ fontSize: '8.2pt', letterSpacing: '0.08em' }}
         >
-          <div
-            className="text-center"
-            style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '0.25mm solid rgba(255,255,255,0.12)',
-              borderRadius: '2mm',
-              padding: '1.4mm 1mm',
-            }}
-          >
-            <div className="font-black uppercase text-[#FF5500]" style={{ fontSize: '5.6pt' }}>
-              {isExp ? 'BUMPER TPU' : 'ZERO-SCRATCH'}
-            </div>
-            <div className="text-slate-300" style={{ fontSize: '4.9pt', lineHeight: 1.15 }}>
-              {isExp ? 'Chasis anti-impacto' : 'Flexible · No raya tu moto'}
-            </div>
-          </div>
-
-          <div
-            className="text-center"
-            style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '0.25mm solid rgba(255,255,255,0.12)',
-              borderRadius: '2mm',
-              padding: '1.4mm 1mm',
-            }}
-          >
-            <div className="font-black uppercase text-[#FF5500]" style={{ fontSize: '5.6pt' }}>
-              ACCESO &lt; 1 SEG
-            </div>
-            <div className="text-slate-300" style={{ fontSize: '4.9pt', lineHeight: 1.15 }}>
-              Sin apps ni claves previas
-            </div>
-          </div>
-
-          <div
-            className="text-center"
-            style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '0.25mm solid rgba(255,255,255,0.12)',
-              borderRadius: '2mm',
-              padding: '1.4mm 1mm',
-            }}
-          >
-            <div className="font-black uppercase text-[#FF5500]" style={{ fontSize: '5.6pt' }}>
-              GPS + SOS
-            </div>
-            <div className="text-slate-300" style={{ fontSize: '4.9pt', lineHeight: 1.15 }}>
-              Alerta WhatsApp y Llamada 1-Touch
-            </div>
-          </div>
+          USHUAIA
         </div>
-
         <div
-          className="bg-[#0E1012] text-center"
-          style={{
-            borderTop: '0.5mm solid #FF5500',
-            padding: '2.2mm 3mm 2.8mm 3mm',
-          }}
+          className="font-semibold uppercase text-slate-400"
+          style={{ fontSize: '5.2pt', letterSpacing: '0.22em', marginTop: '0.9mm' }}
         >
-          <div className="font-black text-white" style={{ fontSize: '8.8pt' }}>
-            « Escaneá. <span className="text-[#FF5500]">Asistí.</span> Rescatá. »
-          </div>
-          <div
-            className="font-bold uppercase text-slate-400"
-            style={{ fontSize: '5.1pt', letterSpacing: '0.12em', marginTop: '0.7mm' }}
-          >
-            DISEÑADO Y FABRICADO EN USHUAIA • TIERRA DEL FUEGO
-          </div>
+          PATAGONIA
         </div>
       </div>
     </div>
   );
 
-  const renderBackCard = (serialCode: string) => (
+  const renderBackCard = () => (
     <div
-      className="relative flex flex-col justify-between overflow-hidden bg-[#18191A] text-[#F2F4F7]"
+      className="relative overflow-hidden bg-[#1E2023] text-[#F4F6F8]"
       style={{
-        width: '92mm',
-        height: '138mm',
-        borderRadius: '5mm',
-        border: '0.35mm dashed #64748b',
+        width: '90mm',
+        height: '130mm',
+        borderRadius: '5.5mm',
+        border: '0.25mm solid #334155',
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact',
       }}
     >
-      <div>
-        <div
-          className="mx-auto flex items-center justify-center bg-white text-slate-400 font-bold uppercase tracking-widest"
-          style={{
-            width: '30mm',
-            height: '7.5mm',
-            marginTop: '3.5mm',
-            borderRadius: '4mm',
-            border: '0.35mm dashed #94a3b8',
-            fontSize: '5.5pt',
-          }}
-        >
-          Dorso · Troquel Colgador
-        </div>
+      <svg
+        viewBox="0 0 92 138"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+        }}
+      >
+        <path
+          d="M 33 7.5 H 41.5 A 3.5 3.5 0 0 1 49.5 7.5 H 59 A 2 2 0 0 1 61 9.5 V 11 A 2 2 0 0 1 59 13 H 33 A 2 2 0 0 1 31 11 V 9.5 A 2 2 0 0 1 33 7.5 Z"
+          fill="#ffffff"
+          stroke="#475569"
+          strokeWidth="0.25"
+        />
+        <polyline
+          points="5.5,19 5.5,11.5 9.5,7.5 14,7.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+        <polyline
+          points="86.5,19 86.5,11.5 82.5,7.5 78,7.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
 
+        <path d="M 0 21.5 H 18.5 C 16.5 25.5, 16.5 29.5, 18.5 33.5 H 0 Z" fill="#FF5500" />
+        <path d="M 92 21.5 H 73.5 C 75.5 25.5, 75.5 29.5, 73.5 33.5 H 92 Z" fill="#FF5500" />
+
+        <path
+          d="M 20.2 21.2 C 18 25.5, 18 29.5, 20.2 33.8"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.75"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 71.8 21.2 C 74 25.5, 74 29.5, 71.8 33.8"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.75"
+          strokeLinecap="round"
+        />
+
+        <polyline
+          points="8.5,38 5.5,38 5.5,119.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+        <polyline
+          points="83.5,38 86.5,38 86.5,119.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+
+        <polyline
+          points="5.5,119.5 10.5,125 32.5,125 35.5,121.8 56.5,121.8 59.5,125 81.5,125 86.5,119.5"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.55"
+        />
+        <polyline
+          points="4.5,124 9.5,129.2 29,129.2"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.5"
+        />
+        <polyline
+          points="87.5,124 82.5,129.2 63,129.2"
+          fill="none"
+          stroke="#FF5500"
+          strokeWidth="0.5"
+        />
+      </svg>
+
+      {/* Cabecera Dorso */}
+      <div
+        className="absolute inset-x-0 text-center"
+        style={{ top: '21.5mm', zIndex: 2 }}
+      >
+        <div className="font-black text-white leading-none" style={{ fontSize: '18pt' }}>
+          Res<span className="text-[#FF5500]">Q</span>
+        </div>
         <div
-          className="bg-[#FF5500] text-white text-center font-black uppercase"
-          style={{
-            marginTop: '2.2mm',
-            padding: '1.2mm 2mm',
-            fontSize: '5.7pt',
-            letterSpacing: '0.14em',
-          }}
+          className="font-bold uppercase text-[#FF5500]"
+          style={{ fontSize: '6pt', letterSpacing: '0.16em', marginTop: '0.8mm' }}
         >
-          INSTRUCCIONES DE ACTIVACIÓN Y USO EN RUTA
+          GUÍA RÁPIDA DE ACTIVACIÓN
         </div>
       </div>
 
+      {/* Cuerpo Dorso */}
       <div
-        className="flex flex-1 flex-col justify-between"
-        style={{ padding: '2.5mm 4.5mm' }}
+        className="absolute flex flex-col justify-between"
+        style={{
+          top: '38mm',
+          left: '9.5mm',
+          right: '9.5mm',
+          bottom: '19mm',
+          zIndex: 2,
+        }}
       >
-        <div>
-          <div
-            className="font-black uppercase text-[#FF5500]"
-            style={{
-              fontSize: '6.8pt',
-              letterSpacing: '0.07em',
-              borderBottom: '0.3mm solid rgba(255,85,0,0.35)',
-              paddingBottom: '1mm',
-              marginBottom: '2mm',
-            }}
-          >
-            ⚡ ACTIVÁ TU LLAVERO EN 60 SEGUNDOS
-          </div>
-
-          <div className="flex flex-col" style={{ gap: '1.8mm' }}>
-            {[
-              {
-                n: '1',
-                t: 'Escaneá el Código QR Virgen',
-                d: 'Apuntá la cámara de tu celular al código QR de tu llavero ResQ. Se abrirá el formulario de alta sin instalar ninguna app.',
-              },
-              {
-                n: '2',
-                t: 'Cargá tu Ficha Médica y Contactos',
-                d: 'Completá tu grupo sanguíneo, alergias, obra social, foto, datos de tu moto y hasta 3 contactos de emergencia.',
-              },
-              {
-                n: '3',
-                t: '100% Dinámico y Editable en Viaje',
-                d: 'Tu QR queda protegido con tu clave personal. Podés actualizar teléfonos, seguro o medicación cuando quieras.',
-              },
-            ].map((step) => (
+        <div className="flex flex-col" style={{ gap: '2.2mm' }}>
+          {[
+            {
+              n: '1',
+              t: 'Escaneá el QR de tu Llavero',
+              d: 'Apuntá la cámara de tu celular al código QR del reverso. No requiere descargar aplicaciones.',
+            },
+            {
+              n: '2',
+              t: 'Completá tu Ficha Médica SOS',
+              d: 'Cargá foto del piloto, grupo sanguíneo, alergias, obra social, datos de tu moto y hasta 3 contactos.',
+            },
+            {
+              n: '3',
+              t: '100% Dinámico y Editable',
+              d: 'Ante una emergencia, el socorrista envía tu ubicación GPS exacta por WhatsApp con un solo toque.',
+            },
+          ].map((step) => (
+            <div
+              key={step.n}
+              className="flex items-start"
+              style={{
+                background: 'rgba(255,255,255,0.035)',
+                border: '0.25mm solid rgba(255,85,0,0.35)',
+                borderRadius: '2mm',
+                padding: '2.2mm 2.5mm',
+                gap: '2.2mm',
+              }}
+            >
               <div
-                key={step.n}
-                className="flex items-start"
-                style={{
-                  gap: '2mm',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '0.25mm solid rgba(255,255,255,0.09)',
-                  borderRadius: '2mm',
-                  padding: '1.7mm 2mm',
-                }}
+                className="flex shrink-0 items-center justify-center rounded-full bg-[#FF5500] font-black text-white"
+                style={{ width: '5mm', height: '5mm', fontSize: '6.5pt' }}
               >
-                <div
-                  className="flex shrink-0 items-center justify-center rounded-full bg-[#FF5500] font-black text-white"
-                  style={{ width: '4.8mm', height: '4.8mm', fontSize: '6.2pt' }}
-                >
-                  {step.n}
+                {step.n}
+              </div>
+              <div>
+                <div className="font-extrabold uppercase text-white" style={{ fontSize: '6.3pt' }}>
+                  {step.t}
                 </div>
-                <div>
-                  <h4 className="font-extrabold uppercase text-white" style={{ fontSize: '6pt' }}>
-                    {step.t}
-                  </h4>
-                  <p className="text-slate-300" style={{ fontSize: '5.3pt', lineHeight: 1.25 }}>
-                    {step.d}
-                  </p>
+                <div
+                  className="text-slate-300"
+                  style={{ fontSize: '5.3pt', lineHeight: 1.25, marginTop: '0.4mm' }}
+                >
+                  {step.d}
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
 
         <div
           style={{
-            background: 'rgba(230,0,0,0.08)',
-            border: '0.3mm solid rgba(230,0,0,0.45)',
+            background: 'rgba(0,0,0,0.35)',
+            border: '0.25mm solid rgba(255,255,255,0.12)',
             borderRadius: '2mm',
-            padding: '2mm 2.5mm',
+            padding: '2.2mm 2.8mm',
           }}
         >
-          <h5 className="font-black uppercase text-red-400" style={{ fontSize: '5.8pt' }}>
-            🚨 JERARQUÍA DE RESCATE EN EMERGENCIA
-          </h5>
+          <div
+            className="font-black uppercase text-[#FF5500]"
+            style={{ fontSize: '5.8pt', letterSpacing: '0.06em', marginBottom: '1.2mm' }}
+          >
+            ESPECIFICACIONES TÁCTICAS
+          </div>
           <div
             className="grid grid-cols-2 text-slate-200"
-            style={{ fontSize: '5.1pt', gap: '0.8mm 2mm', marginTop: '1mm' }}
+            style={{ gap: '1mm 2mm', fontSize: '5.2pt' }}
           >
-            <span>▪ Alerta GPS vía WhatsApp</span>
-            <span>▪ Grupo sanguíneo visible</span>
-            <span>▪ Llamada 1-Toque a Familia</span>
-            <span>▪ Marcación rápida 107 / 911</span>
-            <span>▪ Idiomas ES / EN / PT</span>
-            <span>▪ Privacidad Antirrobo</span>
+            <div>▪ Polímero Zero-Scratch</div>
+            <div>▪ Envío de GPS vía WhatsApp</div>
+            <div>▪ Resistente a agua y ripio</div>
+            <div>▪ Llamada 1-Touch 107 / 911</div>
+            <div>▪ Idiomas ES / EN / PT</div>
+            <div>▪ Protección Antirrobo</div>
           </div>
         </div>
 
         <div
-          className="flex items-center justify-between bg-[#0E1012]"
+          className="flex items-center justify-between bg-[#141618]"
           style={{
             border: '0.3mm solid #334155',
             borderRadius: '2mm',
-            padding: '1.6mm 2.5mm',
+            padding: '1.8mm 2.8mm',
           }}
         >
           <div>
-            <span className="block font-bold uppercase text-slate-400" style={{ fontSize: '4.8pt' }}>
-              SERIE / CÓDIGO QR
-            </span>
-            <span className="font-mono font-black text-white" style={{ fontSize: '7.5pt' }}>
-              {serialCode}
-            </span>
+            <div className="font-bold uppercase text-slate-400" style={{ fontSize: '4.8pt' }}>
+              SISTEMA OFICIAL
+            </div>
+            <div className="font-extrabold text-white" style={{ fontSize: '6.5pt' }}>
+              Escaneá. Asistí. Rescatá.
+            </div>
           </div>
-          <div className="text-right">
-            <span className="block font-bold uppercase text-slate-400" style={{ fontSize: '4.8pt' }}>
-              ORIGEN PATAGONIA
-            </span>
-            <span className="font-mono font-black text-[#FF5500]" style={{ fontSize: '7pt' }}>
-              USHUAIA · FIN DEL MUNDO
+          <div
+            className="flex items-center justify-center bg-white"
+            style={{ width: '24mm', height: '7mm', borderRadius: '1mm' }}
+          >
+            <span className="font-bold uppercase text-slate-400" style={{ fontSize: '4.5pt' }}>
+              Sello / ID
             </span>
           </div>
         </div>
       </div>
 
+      {/* Pie Técnico: USHUAIA PATAGONIA */}
       <div
-        className="bg-[#0E1012] text-center"
-        style={{
-          borderTop: '0.5mm solid #FF5500',
-          padding: '2.2mm 3mm 2.8mm 3mm',
-        }}
+        className="absolute inset-x-0 text-center"
+        style={{ bottom: '6.2mm', zIndex: 2 }}
       >
-        <div className="font-black text-white" style={{ fontSize: '8.2pt' }}>
-          Res<span className="text-[#FF5500]">Q</span> Patagonia · LAT 54° 48&apos; S
+        <div
+          className="font-black uppercase text-white leading-none"
+          style={{ fontSize: '8.2pt', letterSpacing: '0.08em' }}
+        >
+          USHUAIA
         </div>
         <div
-          className="font-bold uppercase text-slate-400"
-          style={{ fontSize: '4.9pt', letterSpacing: '0.11em', marginTop: '0.6mm' }}
+          className="font-semibold uppercase text-slate-400"
+          style={{ fontSize: '5.2pt', letterSpacing: '0.22em', marginTop: '0.9mm' }}
         >
-          RUTA NACIONAL N° 3 • TIERRA DEL FUEGO • ARGENTINA
+          PATAGONIA
         </div>
       </div>
     </div>
@@ -448,112 +556,84 @@ export default function BlisterGeneratorPage() {
 
   return (
     <main className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 sm:p-6 print:bg-white print:p-0">
-      {/* Barra de configuración (Se oculta automáticamente al imprimir en A4) */}
-      <div className="max-w-5xl mx-auto mb-6 bg-[#131b2e] border border-orange-500/40 rounded-2xl p-4 space-y-4 print:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 5mm;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+          }
+        }
+      `}</style>
+      <div className="max-w-5xl mx-auto mb-6 bg-[#131b2e] border border-orange-500/40 rounded-2xl p-4 space-y-3 print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-extrabold tracking-widest text-[#FF5500] uppercase">
-              FASE 4 DEL DOSSIER • PACKAGING &amp; ESTRATEGIA COMERCIAL
+              DISEÑO OFICIAL DE TIENDA • 1 UNIDAD CENTRAL (GENÉRICO SIN NUMERACIÓN FIJA)
             </p>
-            <h1 className="text-2xl font-black text-white">
-              Generador de Blíster Comercial ResQ (Escala Real 1:1 en A4)
+            <h1 className="text-xl sm:text-2xl font-black text-white">
+              Blíster Comercial ResQ Patagonia (Escala 1:1 en Hoja A4)
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCleanPrint(false)}
+              className={`px-3 py-2 rounded-xl text-xs font-black border transition ${
+                !cleanPrint
+                  ? 'bg-[#FF5500] text-white border-orange-400'
+                  : 'bg-slate-900 text-slate-300 border-slate-700'
+              }`}
+            >
+              👁️ Con Llavero Presentado
+            </button>
+            <button
+              type="button"
+              onClick={() => setCleanPrint(true)}
+              className={`px-3 py-2 rounded-xl text-xs font-black border transition ${
+                cleanPrint
+                  ? 'bg-[#FF5500] text-white border-orange-400'
+                  : 'bg-slate-900 text-slate-300 border-slate-700'
+              }`}
+            >
+              ✂️ Cartón Limpio (Para Imprenta)
+            </button>
             <Link
               href="/admin"
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700"
             >
-              ← Volver al Admin
+              ← Admin
             </Link>
             <button
               type="button"
               onClick={() => window.print()}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-black uppercase tracking-wider text-white shadow-lg"
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-black uppercase tracking-wider text-white shadow-lg"
             >
-              🖨️ Imprimir Hoja A4 (Escala 100%)
+              🖨️ Imprimir A4
             </button>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-bold text-orange-300 mb-1">
-              Modelo de Hardware (Según Dossier Sección 3)
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setEdition('moto')}
-                className={`py-2 px-3 rounded-xl text-xs font-black border transition ${
-                  edition === 'moto'
-                    ? 'bg-[#FF5500] text-white border-orange-400'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                🏍️ ResQ Moto Edition (Circular)
-              </button>
-              <button
-                type="button"
-                onClick={() => setEdition('explorer')}
-                className={`py-2 px-3 rounded-xl text-xs font-black border transition ${
-                  edition === 'explorer'
-                    ? 'bg-[#FF5500] text-white border-orange-400'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`}
-              >
-                🏔️ ResQ Explorer (Bumper)
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Código Blíster #1 (Superior)
-            </label>
-            <input
-              type="text"
-              value={code1}
-              onChange={(e) => setCode1(e.target.value.toUpperCase())}
-              className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono font-bold text-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Código Blíster #2 (Inferior)
-            </label>
-            <input
-              type="text"
-              value={code2}
-              onChange={(e) => setCode2(e.target.value.toUpperCase())}
-              className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono font-bold text-white"
-            />
-          </div>
-        </div>
-
-        <p className="text-[11px] text-slate-400">
-          💡 <strong>Tip de armado:</strong> Cada tarjeta mide exactamente <strong>92 × 138 mm</strong>. En una hoja A4 entran <strong>2 Blísters completos (Frente + Dorso enfrentados)</strong>. Podés imprimir en papel ilustración de 300g, recortar el par unido por el medio y doblarlo al centro (quedando Frente y Dorso pegados de doble espesor 600g súper rígido), hacer la ranura para pasar la argolla o precinto, ¡y colgar en el exhibidor!
-        </p>
       </div>
 
-      {/* Lienzo Hoja A4 a Escala Milimétrica Exacta */}
       <div className="flex justify-center">
         <div
           className="bg-white shadow-2xl print:shadow-none grid justify-center content-center"
           style={{
-            width: '210mm',
-            minHeight: '297mm',
-            padding: '6mm',
-            gridTemplateColumns: 'repeat(2, 92mm)',
-            gridTemplateRows: 'repeat(2, 138mm)',
+            width: '192mm',
+            padding: '2mm',
+            gridTemplateColumns: 'repeat(2, 90mm)',
+            gridTemplateRows: 'repeat(2, 130mm)',
             gap: '4mm',
           }}
         >
-          {renderFrontCard(code1)}
-          {renderBackCard(code1)}
-          {renderFrontCard(code2)}
-          {renderBackCard(code2)}
+          {renderFrontCard()}
+          {renderBackCard()}
+          {renderFrontCard()}
+          {renderBackCard()}
         </div>
       </div>
     </main>
