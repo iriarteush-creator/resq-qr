@@ -45,8 +45,8 @@ export interface RiderProfile {
 }
 
 export const DEMO_PROFILES: Record<string, RiderProfile> = {
-  'USH-0001': {
-    qr_code: 'USH-0001',
+  'DEMO-0001': {
+    qr_code: 'DEMO-0001',
     status: 'active',
     full_name: 'Martín Alejandro Gómez',
     nickname: 'Tincho',

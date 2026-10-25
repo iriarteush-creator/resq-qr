@@ -40,8 +40,11 @@ export default function QrEmergencyPage({
   const t = TRANSLATIONS[lang];
 
   // Función auxiliar para guardar la ficha en Supabase de forma 100% segura (sin fallar por FK de owner_id no confirmado)
-  const syncProfileToSupabase = async (prof: RiderProfile, confirmedUserId?: string) => {
-    if (!isSupabaseConfigured || !supabase) return { ok: true };
+  const syncProfileToSupabase = async (
+    prof: RiderProfile,
+    confirmedUserId?: string
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (!isSupabaseConfigured || !supabase) return { ok: true, error: undefined };
 
     // 1. Primero activar el QR en qr_tags (obligatorio antes de insertar en rider_profiles por la política RLS)
     const { error: tagErr } = await supabase
@@ -156,16 +159,22 @@ export default function QrEmergencyPage({
         }
 
         // Si en Supabase aún no está en rider_profiles pero el celular ya lo tenía en LocalStorage
-        // (por ejemplo, cargado antes de actualizar las políticas SQL), sincronizarlo automáticamente a Supabase!
+        // (y no es la ficha demo ficticia de Martín Alejandro Gómez), sincronizarlo automáticamente a Supabase!
         const savedLocal = localStorage.getItem(`resq_profile_${code}`);
         if (savedLocal) {
           try {
             const parsedLocal: RiderProfile = JSON.parse(savedLocal);
-            if (parsedLocal && parsedLocal.full_name) {
+            if (
+              parsedLocal &&
+              parsedLocal.full_name &&
+              parsedLocal.full_name !== 'Martín Alejandro Gómez'
+            ) {
               await syncProfileToSupabase(parsedLocal);
               setProfile({ ...parsedLocal, status: 'active' });
               setLoading(false);
               return;
+            } else if (parsedLocal?.full_name === 'Martín Alejandro Gómez') {
+              localStorage.removeItem(`resq_profile_${code}`);
             }
           } catch {
             // Continuar
