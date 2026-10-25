@@ -1,5 +1,18 @@
 export type Lang = 'es' | 'en' | 'pt';
 
+export interface SosMessagePayload {
+  riderName: string;
+  contactName: string;
+  contactRelation: string;
+  code: string;
+  bikeModel: string;
+  bikePlate: string;
+  bloodType: string;
+  mapsUrl: string | null;
+  coords: string | null;
+  profileUrl: string;
+}
+
 export const TRANSLATIONS: Record<
   Lang,
   {
@@ -19,6 +32,7 @@ export const TRANSLATIONS: Record<
     no: string;
     sendGpsTitle: string;
     sendGpsSubtitle: string;
+    recipientLabel: string;
     btnGetGpsWhatsapp: string;
     btnGetGpsSms: string;
     locatingGps: string;
@@ -38,12 +52,7 @@ export const TRANSLATIONS: Record<
     callTowService: string;
     privacyNotice: string;
     riderLoginBtn: string;
-    whatsappSosTemplate: (
-      riderName: string,
-      code: string,
-      mapsUrl: string,
-      coords: string
-    ) => string;
+    whatsappSosTemplate: (p: SosMessagePayload) => string;
     unclaimedTitle: string;
     unclaimedSubtitle: string;
     claimStepAccount: string;
@@ -69,12 +78,14 @@ export const TRANSLATIONS: Record<
     no: 'No',
     sendGpsTitle: 'ENVIAR UBICACIÓN DE EMERGENCIA',
     sendGpsSubtitle:
-      'Toca para capturar tu GPS actual y avisar al contacto de emergencia del piloto.',
-    btnGetGpsWhatsapp: 'Enviar Ubicación GPS por WhatsApp',
-    btnGetGpsSms: 'Respaldo Baja Señal: Enviar GPS por SMS',
+      'Envía una alerta inmediata por WhatsApp o SMS con tu ubicación GPS al contacto de emergencia del piloto.',
+    recipientLabel: 'Enviar alerta a:',
+    btnGetGpsWhatsapp: 'Enviar Alerta y GPS por WhatsApp a',
+    btnGetGpsSms: 'Respaldo Baja Señal: Enviar SMS a',
     locatingGps: 'Obteniendo coordenadas satelitales GPS...',
-    gpsReady: 'Coordenadas listas para enviar',
-    gpsError: 'No se pudo obtener el GPS automático. Se enviará mensaje de alerta directo.',
+    gpsReady: 'Coordenadas GPS listas para enviar',
+    gpsError:
+      'Tu navegador no permitió leer el GPS (verifica permisos de Ubicación en tu celular). Se enviará la alerta con los datos del piloto.',
     emergencyContacts: 'CONTACTOS DE EMERGENCIA DEL PILOTO',
     callNow: 'LLAMAR AHORA',
     localEmergencyNumbers: 'EMERGENCIAS LOCALES (ARGENTINA / USHUAIA)',
@@ -90,8 +101,34 @@ export const TRANSLATIONS: Record<
     privacyNotice:
       'Protección Antirrobo Activa: Esta ficha oculta domicilio particular y documento completo del titular.',
     riderLoginBtn: 'Soy el piloto · Ingresar o Recuperar Clave',
-    whatsappSosTemplate: (riderName, code, mapsUrl, coords) =>
-      `🚨 *ALERTA SOS MOTO (${code})* 🚨\nHola, escaneé el llavero QR de emergencia de *${riderName}*.\n\n📍 *Ubicación GPS actual:* ${mapsUrl}\n🧭 *Coordenadas:* ${coords}\n\nPor favor comunícate urgente a este número.`,
+    whatsappSosTemplate: (p) => {
+      const rName = p.riderName.trim() || 'Piloto';
+      const cName = p.contactName.trim() || 'Contacto de Emergencia';
+      const cRel = p.contactRelation.trim() ? ` (${p.contactRelation.trim()})` : '';
+      const bike = p.bikeModel.trim() || 'Moto';
+      const plate = p.bikePlate.trim() || 'S/D';
+      const blood = p.bloodType.trim() || 'S/D';
+
+      const gpsSection = p.mapsUrl
+        ? `*UBICACION GPS DEL INCIDENTE:*\n${p.mapsUrl}\nCoordenadas: ${p.coords}`
+        : `*UBICACION:* (El celular desde el que se escaneo el QR no tiene permisos de GPS activados; comunicate a este numero para confirmar el lugar exacto).`;
+
+      return [
+        `*ALERTA DE EMERGENCIA - ResQ (${p.code})*`,
+        ``,
+        `Hola *${cName}*${cRel}, te escribo porque acabo de escanear el llavero QR de emergencia de:`,
+        `- *Piloto:* ${rName}`,
+        `- *Moto:* ${bike} (Patente: *${plate}*)`,
+        `- *Grupo Sanguineo:* ${blood}`,
+        ``,
+        gpsSection,
+        ``,
+        `*Ficha medica completa del piloto:*`,
+        `${p.profileUrl}`,
+        ``,
+        `Por favor comunicate urgente conmigo a este numero desde el que te estoy escribiendo.`,
+      ].join('\n');
+    },
     unclaimedTitle: '¡Bienvenido! Este Llavero QR es Nuevo',
     unclaimedSubtitle:
       'Escaneaste un código virgen recién salido del blíster. Completa tus datos para activarlo y vincularlo a tu cuenta.',
@@ -117,12 +154,14 @@ export const TRANSLATIONS: Record<
     no: 'No',
     sendGpsTitle: 'SEND EMERGENCY GPS LOCATION',
     sendGpsSubtitle:
-      'Tap to capture your current GPS coordinates and alert the rider’s emergency contact.',
-    btnGetGpsWhatsapp: 'Send GPS Location via WhatsApp',
-    btnGetGpsSms: 'Low Signal Backup: Send GPS via SMS',
+      'Send an immediate WhatsApp or SMS alert with your GPS coordinates to the rider’s emergency contact.',
+    recipientLabel: 'Send alert to:',
+    btnGetGpsWhatsapp: 'Send WhatsApp Alert & GPS to',
+    btnGetGpsSms: 'Low Signal Backup: Send SMS to',
     locatingGps: 'Acquiring satellite GPS coordinates...',
     gpsReady: 'GPS coordinates ready to send',
-    gpsError: 'Could not read automatic GPS. Direct alert message will be sent.',
+    gpsError:
+      'Browser location permission is disabled. Sending emergency alert with rider details.',
     emergencyContacts: 'RIDER EMERGENCY CONTACTS',
     callNow: 'CALL NOW',
     localEmergencyNumbers: 'LOCAL EMERGENCY SERVICES (ARGENTINA / USHUAIA)',
@@ -138,8 +177,34 @@ export const TRANSLATIONS: Record<
     privacyNotice:
       'Anti-Theft Privacy Active: Home address and full ID number are never stored or displayed.',
     riderLoginBtn: 'I am the rider · Login or Reset Password',
-    whatsappSosTemplate: (riderName, code, mapsUrl, coords) =>
-      `🚨 *MOTO SOS ALERT (${code})* 🚨\nHello, I just scanned the emergency QR keychain of *${riderName}*.\n\n📍 *Current GPS Location:* ${mapsUrl}\n🧭 *Coordinates:* ${coords}\n\nPlease contact this number immediately.`,
+    whatsappSosTemplate: (p) => {
+      const rName = p.riderName.trim() || 'Rider';
+      const cName = p.contactName.trim() || 'Emergency Contact';
+      const cRel = p.contactRelation.trim() ? ` (${p.contactRelation.trim()})` : '';
+      const bike = p.bikeModel.trim() || 'Motorcycle';
+      const plate = p.bikePlate.trim() || 'N/A';
+      const blood = p.bloodType.trim() || 'N/A';
+
+      const gpsSection = p.mapsUrl
+        ? `*INCIDENT GPS LOCATION:*\n${p.mapsUrl}\nCoordinates: ${p.coords}`
+        : `*LOCATION:* (GPS permission was not enabled on the scanner phone; please reply or call this number to confirm location).`;
+
+      return [
+        `*EMERGENCY SOS ALERT - ResQ (${p.code})*`,
+        ``,
+        `Hello *${cName}*${cRel}, I just scanned the emergency QR keychain of:`,
+        `- *Rider:* ${rName}`,
+        `- *Motorcycle:* ${bike} (Plate: *${plate}*)`,
+        `- *Blood Type:* ${blood}`,
+        ``,
+        gpsSection,
+        ``,
+        `*Full Medical & SOS Profile:*`,
+        `${p.profileUrl}`,
+        ``,
+        `Please contact me urgently at this phone number.`,
+      ].join('\n');
+    },
     unclaimedTitle: 'Welcome! This QR Keychain is New',
     unclaimedSubtitle:
       'You scanned an unactivated tag from the blister pack. Fill in your details below to lock and activate it.',
@@ -165,12 +230,14 @@ export const TRANSLATIONS: Record<
     no: 'Não',
     sendGpsTitle: 'ENVIAR LOCALIZAÇÃO DE EMERGÊNCIA',
     sendGpsSubtitle:
-      'Toque para capturar seu GPS atual e avisar o contato de emergência do motociclista.',
-    btnGetGpsWhatsapp: 'Enviar Localização GPS por WhatsApp',
-    btnGetGpsSms: 'Sinal Fraco (2G): Enviar GPS por SMS',
+      'Envie um alerta imediato por WhatsApp ou SMS com sua localização GPS para o contato de emergência do piloto.',
+    recipientLabel: 'Enviar alerta para:',
+    btnGetGpsWhatsapp: 'Enviar Alerta e GPS por WhatsApp para',
+    btnGetGpsSms: 'Sinal Fraco (2G): Enviar SMS para',
     locatingGps: 'Obtendo coordenadas de satélite GPS...',
-    gpsReady: 'Coordenadas prontas para envio',
-    gpsError: 'Não foi possível obter o GPS automático. O alerta será enviado diretamente.',
+    gpsReady: 'Coordenadas GPS prontas para envio',
+    gpsError:
+      'Permissão de GPS desativada no navegador. O alerta será enviado com os dados do piloto.',
     emergencyContacts: 'CONTATOS DE EMERGÊNCIA DO PILOTO',
     callNow: 'LIGAR AGORA',
     localEmergencyNumbers: 'EMERGÊNCIAS LOCAIS (ARGENTINA / USHUAIA)',
@@ -186,8 +253,34 @@ export const TRANSLATIONS: Record<
     privacyNotice:
       'Proteção Antifurto Ativa: Endereço residencial e documento completo nunca são exibidos.',
     riderLoginBtn: 'Sou o piloto · Entrar ou Recuperar Senha',
-    whatsappSosTemplate: (riderName, code, mapsUrl, coords) =>
-      `🚨 *ALERTA SOS MOTO (${code})* 🚨\nOlá, escaneei o chaveiro QR de emergência de *${riderName}*.\n\n📍 *Localização GPS atual:* ${mapsUrl}\n🧭 *Coordenadas:* ${coords}\n\nPor favor, entre em contato urgente com este número.`,
+    whatsappSosTemplate: (p) => {
+      const rName = p.riderName.trim() || 'Piloto';
+      const cName = p.contactName.trim() || 'Contato de Emergencia';
+      const cRel = p.contactRelation.trim() ? ` (${p.contactRelation.trim()})` : '';
+      const bike = p.bikeModel.trim() || 'Moto';
+      const plate = p.bikePlate.trim() || 'S/D';
+      const blood = p.bloodType.trim() || 'S/D';
+
+      const gpsSection = p.mapsUrl
+        ? `*LOCALIZACAO GPS DO INCIDENTE:*\n${p.mapsUrl}\nCoordenadas: ${p.coords}`
+        : `*LOCALIZACAO:* (O celular que escaneou o QR nao estava com permissao de GPS ativa; ligue ou responda para este numero para confirmar o local).`;
+
+      return [
+        `*ALERTA DE EMERGENCIA - ResQ (${p.code})*`,
+        ``,
+        `Ola *${cName}*${cRel}, acabei de escanear o chaveiro QR de emergencia de:`,
+        `- *Piloto:* ${rName}`,
+        `- *Moto:* ${bike} (Placa: *${plate}*)`,
+        `- *Tipo Sanguineo:* ${blood}`,
+        ``,
+        gpsSection,
+        ``,
+        `*Ficha medica completa do piloto:*`,
+        `${p.profileUrl}`,
+        ``,
+        `Por favor, entre em contato urgente comigo por este numero.`,
+      ].join('\n');
+    },
     unclaimedTitle: 'Bem-vindo! Este Chaveiro QR é Novo',
     unclaimedSubtitle:
       'Você escaneou um código virgem recém-saído da embalagem. Preencha seus dados para ativá-lo.',

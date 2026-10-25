@@ -32,7 +32,8 @@ export default function QrEmergencyPage({
   const [authError, setAuthError] = useState('');
   const [recoverSuccess, setRecoverSuccess] = useState('');
 
-  // Estado de Geolocalización para Socorrista
+  // Estado de Geolocalización para Socorrista y Destinatario seleccionado
+  const [selectedContactIdx, setSelectedContactIdx] = useState(0);
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [coordsText, setCoordsText] = useState('');
   const [mapsUrl, setMapsUrl] = useState('');
@@ -233,21 +234,61 @@ export default function QrEmergencyPage({
     reader.readAsDataURL(file);
   };
 
-  // Función para capturar ubicación GPS del socorrista y enviar por WhatsApp o SMS
-  const handleSendLocation = (channel: 'whatsapp' | 'sms', targetPhone?: string) => {
-    if (!profile) return;
-    const rawPhone = targetPhone || profile.emergency_contact_1_phone;
-    const cleanPhone = rawPhone.replace(/[^+\d]/g, '');
+  // Normaliza números telefónicos para WhatsApp (agrega 549 si es número argentino local sin prefijo)
+  const formatPhoneForWhatsApp = (rawPhone: string): string => {
+    let digits = rawPhone.replace(/\D/g, '');
+    if (digits.startsWith('00')) {
+      digits = digits.slice(2);
+    }
+    if (digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    // Si cargó 10 dígitos típicos de Argentina (ej. 2901508099) sin código de país, anteponer 549
+    if (digits.length === 10 && !digits.startsWith('54')) {
+      digits = `549${digits}`;
+    } else if (digits.length === 12 && digits.startsWith('54') && !digits.startsWith('549')) {
+      digits = `549${digits.slice(2)}`;
+    }
+    return digits;
+  };
 
-    const triggerMessage = (url: string, coords: string) => {
-      const msg = t.whatsappSosTemplate(profile.full_name, profile.qr_code, url, coords);
+  // Función para capturar ubicación GPS del socorrista y enviar por WhatsApp o SMS al contacto elegido
+  const handleSendLocation = (
+    channel: 'whatsapp' | 'sms',
+    customContact?: { name: string; relation: string; phone: string }
+  ) => {
+    if (!profile) return;
+
+    const chosen = customContact || {
+      name: profile.emergency_contact_1_name,
+      relation: profile.emergency_contact_1_relation,
+      phone: profile.emergency_contact_1_phone,
+    };
+
+    const rawPhone = chosen.phone || profile.emergency_contact_1_phone;
+    const cleanPhone = rawPhone.replace(/[^+\d]/g, '');
+    const waPhone = formatPhoneForWhatsApp(rawPhone);
+    const profileUrl = `${SITE_URL}/q/${encodeURIComponent(profile.qr_code)}`;
+
+    const triggerMessage = (url: string | null, coords: string | null) => {
+      const msg = t.whatsappSosTemplate({
+        riderName: profile.full_name,
+        contactName: chosen.name,
+        contactRelation: chosen.relation,
+        code: profile.qr_code,
+        bikeModel: profile.bike_brand_model,
+        bikePlate: profile.bike_plate,
+        bloodType: profile.blood_type,
+        mapsUrl: url,
+        coords,
+        profileUrl,
+      });
+
       if (channel === 'whatsapp') {
-        const waPhone = cleanPhone.replace(/^\+/, '');
-        window.open(
-          `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`,
-          '_blank',
-          'noopener,noreferrer'
-        );
+        const targetWaUrl = `https://api.whatsapp.com/send?phone=${waPhone}&text=${encodeURIComponent(
+          msg
+        )}`;
+        window.location.href = targetWaUrl;
       } else {
         window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(msg)}`;
       }
@@ -260,28 +301,38 @@ export default function QrEmergencyPage({
 
     if (!navigator.geolocation) {
       setGpsStatus('error');
-      triggerMessage('Ubicación GPS no disponible en este navegador', 'Sin señal GPS');
+      triggerMessage(null, null);
       return;
     }
 
     setGpsStatus('loading');
+
+    const onSuccess = (pos: GeolocationPosition) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      const accuracy = Math.round(pos.coords.accuracy);
+      const cText = `${lat}, ${lng} (±${accuracy}m)`;
+      const mUrl = `https://maps.google.com/?q=${lat},${lng}`;
+      setCoordsText(cText);
+      setMapsUrl(mUrl);
+      setGpsStatus('ready');
+      triggerMessage(mUrl, cText);
+    };
+
+    // Intento 1: Alta precisión GPS; si falla o demora en iOS/Android, reintento rápido por antena/Wi-Fi
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude.toFixed(6);
-        const lng = pos.coords.longitude.toFixed(6);
-        const accuracy = Math.round(pos.coords.accuracy);
-        const cText = `${lat}, ${lng} (±${accuracy}m)`;
-        const mUrl = `https://maps.google.com/?q=${lat},${lng}`;
-        setCoordsText(cText);
-        setMapsUrl(mUrl);
-        setGpsStatus('ready');
-        triggerMessage(mUrl, cText);
-      },
+      onSuccess,
       () => {
-        setGpsStatus('error');
-        triggerMessage('Sin lectura GPS (verificar permisos)', 'Llamar al socorrista');
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          () => {
+            setGpsStatus('error');
+            triggerMessage(null, null);
+          },
+          { enableHighAccuracy: false, timeout: 6000, maximumAge: 300000 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
     );
   };
 
@@ -682,7 +733,10 @@ export default function QrEmergencyPage({
 
               <div className="space-y-2">
                 <p className="text-xs font-bold text-emerald-400">
-                  Contacto de Emergencia 1 (Principal) *
+                  Contacto de Emergencia 1 (Principal - Familiar o Allegado) *
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  ⚠️ Ingresa el celular de la persona a quien deben avisar si tienes un accidente (no pongas tu propio número, o WhatsApp abrirá tu propio chat).
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input
@@ -1005,42 +1059,113 @@ export default function QrEmergencyPage({
         </section>
 
         {/* c) ENVIAR UBICACIÓN DE EMERGENCIA AL CONTACTO (WhatsApp + SMS 2G) */}
-        <section className="bg-gradient-to-br from-orange-600/25 to-red-600/20 border-2 border-[#ff5500] rounded-2xl p-4 space-y-3">
-          <div>
-            <h2 className="text-sm font-black uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
-              📍 {t.sendGpsTitle}
-            </h2>
-            <p className="text-xs text-slate-300 mt-0.5">{t.sendGpsSubtitle}</p>
-          </div>
+        {(() => {
+          const activeRecipient = contactsList[selectedContactIdx] ||
+            contactsList[0] || {
+              name: profile.emergency_contact_1_name || 'Contacto de Emergencia',
+              relation: profile.emergency_contact_1_relation || '',
+              phone: profile.emergency_contact_1_phone || '',
+            };
 
-          <button
-            type="button"
-            onClick={() => handleSendLocation('whatsapp')}
-            className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transition"
-          >
-            <span>📲 {t.btnGetGpsWhatsapp}</span>
-          </button>
+          return (
+            <section className="bg-gradient-to-br from-orange-600/25 to-red-600/20 border-2 border-[#ff5500] rounded-2xl p-4 space-y-3">
+              <div>
+                <h2 className="text-sm font-black uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
+                  📍 {t.sendGpsTitle}
+                </h2>
+                <p className="text-xs text-slate-300 mt-0.5">{t.sendGpsSubtitle}</p>
+              </div>
 
-          <button
-            type="button"
-            onClick={() => handleSendLocation('sms')}
-            className="w-full py-2.5 px-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition"
-          >
-            <span>✉️ {t.btnGetGpsSms}</span>
-          </button>
+              {/* Caja explícita mostrando A QUIÉN se le envía el mensaje */}
+              <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-orange-400">
+                    🎯 {t.recipientLabel}
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-emerald-400">
+                    {activeRecipient.phone}
+                  </span>
+                </div>
+                <p className="text-sm font-black text-white">
+                  {activeRecipient.name}{' '}
+                  {activeRecipient.relation && (
+                    <span className="text-xs font-semibold text-orange-300">
+                      ({activeRecipient.relation})
+                    </span>
+                  )}
+                </p>
 
-          {gpsStatus === 'loading' && (
-            <p className="text-xs text-amber-300 font-medium text-center animate-pulse">
-              🛰️ {t.locatingGps}
-            </p>
-          )}
-          {gpsStatus === 'ready' && coordsText && (
-            <div className="bg-slate-950/80 border border-emerald-500/40 rounded-xl p-2.5 text-center">
-              <p className="text-[11px] font-bold text-emerald-400">✓ {t.gpsReady}</p>
-              <p className="text-xs font-mono text-white mt-0.5">{coordsText}</p>
-            </div>
-          )}
-        </section>
+                {contactsList.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {contactsList.map((c, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setSelectedContactIdx(i)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                          selectedContactIdx === i
+                            ? 'bg-[#ff5500] text-white border-orange-400'
+                            : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                        }`}
+                      >
+                        #{i + 1} {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleSendLocation('whatsapp', {
+                    name: activeRecipient.name || '',
+                    relation: activeRecipient.relation || '',
+                    phone: activeRecipient.phone || '',
+                  })
+                }
+                className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transition text-center"
+              >
+                <span>
+                  📲 {t.btnGetGpsWhatsapp} {activeRecipient.name}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleSendLocation('sms', {
+                    name: activeRecipient.name || '',
+                    relation: activeRecipient.relation || '',
+                    phone: activeRecipient.phone || '',
+                  })
+                }
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition text-center"
+              >
+                <span>
+                  ✉️ {t.btnGetGpsSms} {activeRecipient.name}
+                </span>
+              </button>
+
+              {gpsStatus === 'loading' && (
+                <p className="text-xs text-amber-300 font-medium text-center animate-pulse">
+                  🛰️ {t.locatingGps}
+                </p>
+              )}
+              {gpsStatus === 'ready' && coordsText && (
+                <div className="bg-slate-950/80 border border-emerald-500/40 rounded-xl p-2.5 text-center">
+                  <p className="text-[11px] font-bold text-emerald-400">✓ {t.gpsReady}</p>
+                  <p className="text-xs font-mono text-white mt-0.5">{coordsText}</p>
+                </div>
+              )}
+              {gpsStatus === 'error' && (
+                <div className="bg-amber-950/70 border border-amber-500/40 rounded-xl p-2.5 text-center">
+                  <p className="text-[11px] font-semibold text-amber-200">⚠️ {t.gpsError}</p>
+                </div>
+              )}
+            </section>
+          );
+        })()}
 
         {/* d) CONTACTOS DE EMERGENCIA DEL PILOTO (Hasta 3 contactos) */}
         <section className="bg-[#131b2e] border border-slate-800 rounded-2xl p-4 space-y-3">
@@ -1068,7 +1193,13 @@ export default function QrEmergencyPage({
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => handleSendLocation('whatsapp', contact.phone)}
+                    onClick={() =>
+                      handleSendLocation('whatsapp', {
+                        name: contact.name || '',
+                        relation: contact.relation || '',
+                        phone: contact.phone || '',
+                      })
+                    }
                     title="Enviar GPS por WhatsApp a este contacto"
                     className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs px-2.5 py-3 rounded-xl"
                   >
