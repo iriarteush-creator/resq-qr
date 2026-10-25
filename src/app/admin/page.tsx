@@ -421,6 +421,12 @@ export default function AdminDashboardPage() {
             <h1 className="text-3xl font-black text-white">ResQ · Administrador de QRs</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/blister"
+              className="px-3.5 py-2 rounded-xl bg-[#ff5500] hover:bg-orange-600 text-xs font-black text-white shadow"
+            >
+              📦 Imprimir Blísters A4
+            </Link>
             <button
               type="button"
               onClick={fetchAllData}
