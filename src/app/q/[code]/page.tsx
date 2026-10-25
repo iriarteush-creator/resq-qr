@@ -39,6 +39,69 @@ export default function QrEmergencyPage({
 
   const t = TRANSLATIONS[lang];
 
+  // Función auxiliar para guardar la ficha en Supabase de forma 100% segura (sin fallar por FK de owner_id no confirmado)
+  const syncProfileToSupabase = async (prof: RiderProfile, confirmedUserId?: string) => {
+    if (!isSupabaseConfigured || !supabase) return { ok: true };
+
+    // 1. Primero activar el QR en qr_tags (obligatorio antes de insertar en rider_profiles por la política RLS)
+    const { error: tagErr } = await supabase
+      .from('qr_tags')
+      .update({
+        status: 'active',
+        ...(confirmedUserId ? { owner_id: confirmedUserId } : {}),
+        claimed_at: new Date().toISOString(),
+      })
+      .eq('code', code);
+
+    if (tagErr) {
+      // Reintentar sin owner_id por si el usuario aún no confirmó el email en auth.users
+      await supabase
+        .from('qr_tags')
+        .update({
+          status: 'active',
+          claimed_at: new Date().toISOString(),
+        })
+        .eq('code', code);
+    }
+
+    // 2. Empaquetar campos adicionales también en JSON de respaldo
+    const extraJson = JSON.stringify({
+      observations: prof.observations || '',
+      emergency_contact_3_name: prof.emergency_contact_3_name || '',
+      emergency_contact_3_relation: prof.emergency_contact_3_relation || '',
+      emergency_contact_3_phone: prof.emergency_contact_3_phone || '',
+      owner_email: prof.owner_email || '',
+    });
+
+    const { status: _ignoredStatus, ...dbRecordV2 } = prof;
+
+    // 3. Guardar en rider_profiles (sin owner_id si no está confirmado para evitar error FK 23503)
+    const payloadV2 = {
+      ...dbRecordV2,
+      qr_code: code,
+      ...(confirmedUserId ? { owner_id: confirmedUserId } : { owner_id: null }),
+      medical_notes_pt: extraJson,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: upsertErrV2 } = await supabase
+      .from('rider_profiles')
+      .upsert(payloadV2, { onConflict: 'qr_code' });
+
+    if (upsertErrV2) {
+      // Reintento forzando owner_id: null por si el UUID era de un signUp pendiente de confirmación
+      const { error: retryErr } = await supabase
+        .from('rider_profiles')
+        .upsert({ ...payloadV2, owner_id: null }, { onConflict: 'qr_code' });
+
+      if (retryErr) {
+        return { ok: false, error: retryErr.message };
+      }
+    }
+
+    return { ok: true };
+  };
+
   // Detectar si viene desde el link de confirmación de email (?verified=1)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -62,7 +125,6 @@ export default function QrEmergencyPage({
           .maybeSingle();
 
         if (riderData) {
-          // Desempaquetar respaldo JSON en medical_notes_pt por si las columnas v2 aún no fueron creadas
           let extraMeta: Partial<RiderProfile> = {};
           if (riderData.medical_notes_pt && riderData.medical_notes_pt.startsWith('{')) {
             try {
@@ -93,21 +155,30 @@ export default function QrEmergencyPage({
           return;
         }
 
+        // Si en Supabase aún no está en rider_profiles pero el celular ya lo tenía en LocalStorage
+        // (por ejemplo, cargado antes de actualizar las políticas SQL), sincronizarlo automáticamente a Supabase!
+        const savedLocal = localStorage.getItem(`resq_profile_${code}`);
+        if (savedLocal) {
+          try {
+            const parsedLocal: RiderProfile = JSON.parse(savedLocal);
+            if (parsedLocal && parsedLocal.full_name) {
+              await syncProfileToSupabase(parsedLocal);
+              setProfile({ ...parsedLocal, status: 'active' });
+              setLoading(false);
+              return;
+            }
+          } catch {
+            // Continuar
+          }
+        }
+
         const { data: tagData } = await supabase
           .from('qr_tags')
           .select('code, status')
           .eq('code', code)
           .maybeSingle();
 
-        if (tagData && tagData.status === 'unclaimed') {
-          const savedLocal = localStorage.getItem(`resq_profile_${code}`);
-          if (savedLocal) {
-            const parsed = JSON.parse(savedLocal);
-            setProfile(parsed);
-            setLoading(false);
-            return;
-          }
-
+        if (tagData) {
           setProfile({
             qr_code: code,
             status: 'unclaimed',
@@ -124,14 +195,6 @@ export default function QrEmergencyPage({
           setLoading(false);
           return;
         }
-      }
-
-      // Fallback LocalStorage o Demo
-      const savedLocal = localStorage.getItem(`resq_profile_${code}`);
-      if (savedLocal) {
-        setProfile(JSON.parse(savedLocal));
-        setLoading(false);
-        return;
       }
 
       const fallback = DEMO_PROFILES[code] || {
@@ -174,7 +237,7 @@ export default function QrEmergencyPage({
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.72);
           setProfile((prev) => (prev ? { ...prev, [field]: compressedDataUrl } : prev));
         }
       };
@@ -250,24 +313,31 @@ export default function QrEmergencyPage({
       status: 'active',
     };
 
-    // Guardar respaldo local inmediato
+    // Guardar respaldo local
     localStorage.setItem(`resq_profile_${code}`, JSON.stringify(updatedProfile));
     if (email) {
       localStorage.setItem(`resq_owner_${code}`, email.toLowerCase().trim());
     }
 
+    let confirmedUserId: string | undefined;
+
     if (isSupabaseConfigured && supabase) {
-      try {
-        let userId: string | undefined;
+      const { data: sessionData } = await supabase.auth.getSession();
+      confirmedUserId = sessionData.session?.user?.id;
 
-        const { data: sessionData } = await supabase.auth.getSession();
-        userId = sessionData.session?.user?.id;
+      if (!confirmedUserId && email && password) {
+        // Primero intentar iniciar sesión por si el piloto ya creó su usuario antes
+        const { data: signInData } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
 
-        if (!userId && email && password) {
-          // 8. Redirigir el mail de confirmación a https://resq-qr.vercel.app/q/[code]?verified=1 (NUNCA a localhost)
+        if (signInData?.session?.user?.id) {
+          confirmedUserId = signInData.session.user.id;
+        } else {
+          // Si no tenía sesión, registrar usuario con redirección a https://resq-qr.vercel.app
           const redirectUrl = `${SITE_URL}/q/${encodeURIComponent(code)}?verified=1`;
-
-          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+          const { data: signUpData } = await supabase.auth.signUp({
             email: email.trim(),
             password,
             options: {
@@ -275,88 +345,23 @@ export default function QrEmergencyPage({
             },
           });
 
-          if (signUpErr && signUpErr.message.toLowerCase().includes('already registered')) {
-            const { data: signInData, error: signInErr } =
-              await supabase.auth.signInWithPassword({
-                email: email.trim(),
-                password,
-              });
-            if (signInErr) {
-              setAuthError('Ese correo ya está registrado. Ingresa tu contraseña correcta.');
-              setSaving(false);
-              return;
-            }
-            userId = signInData.user?.id;
-          } else if (signUpErr) {
-            setAuthError(signUpErr.message);
-            setSaving(false);
-            return;
+          if (signUpData?.session?.user?.id) {
+            confirmedUserId = signUpData.session.user.id;
           } else {
-            userId = signUpData.user?.id;
-            if (!signUpData.session) {
-              setActivationNotice(
-                'Te enviamos un correo para confirmar tu cuenta. ¡Tu ficha de emergencia ya quedó activa!'
-              );
-            }
+            setActivationNotice(
+              '¡Ficha activada en la nube! Si es la primera vez que usas este correo, revisa tu bandeja para confirmar tu email.'
+            );
           }
         }
+      }
 
-        // Actualizar estado del QR a 'active' en qr_tags
-        await supabase
-          .from('qr_tags')
-          .update({
-            status: 'active',
-            ...(userId ? { owner_id: userId } : {}),
-            claimed_at: new Date().toISOString(),
-          })
-          .eq('code', code);
-
-        // Empaquetar campos nuevos también en medical_notes_pt por compatibilidad total
-        const extraJson = JSON.stringify({
-          observations: updatedProfile.observations || '',
-          emergency_contact_3_name: updatedProfile.emergency_contact_3_name || '',
-          emergency_contact_3_relation: updatedProfile.emergency_contact_3_relation || '',
-          emergency_contact_3_phone: updatedProfile.emergency_contact_3_phone || '',
-          owner_email: updatedProfile.owner_email || '',
-        });
-
-        // Primer intento con todas las columnas v2
-        const { status: _ignoredStatus, ...dbRecordV2 } = updatedProfile;
-        const { error: upsertErrV2 } = await supabase.from('rider_profiles').upsert(
-          {
-            ...dbRecordV2,
-            qr_code: code,
-            ...(userId ? { owner_id: userId } : {}),
-            medical_notes_pt: extraJson,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'qr_code' }
+      const syncRes = await syncProfileToSupabase(updatedProfile, confirmedUserId);
+      if (!syncRes.ok) {
+        setAuthError(
+          `No se pudo sincronizar con la nube (${syncRes.error}). Verifica haber ejecutado el SQL de actualización en Supabase.`
         );
-
-        // Si el usuario aún no corrió update_v2.sql en Supabase, guardar usando las columnas v1 + respaldo JSON
-        if (upsertErrV2) {
-          const {
-            observations: _o,
-            emergency_contact_3_name: _c3n,
-            emergency_contact_3_relation: _c3r,
-            emergency_contact_3_phone: _c3p,
-            owner_email: _oe,
-            ...dbRecordV1
-          } = dbRecordV2;
-
-          await supabase.from('rider_profiles').upsert(
-            {
-              ...dbRecordV1,
-              qr_code: code,
-              ...(userId ? { owner_id: userId } : {}),
-              medical_notes_pt: extraJson,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'qr_code' }
-          );
-        }
-      } catch (err) {
-        console.warn('Guardado en modo local de respaldo:', err);
+        setSaving(false);
+        return;
       }
     }
 
@@ -378,7 +383,12 @@ export default function QrEmergencyPage({
       });
       if (error) {
         const savedOwner = localStorage.getItem(`resq_owner_${code}`);
-        if (!savedOwner || savedOwner !== email.toLowerCase().trim()) {
+        const matchesEmail =
+          (profile?.owner_email &&
+            profile.owner_email.toLowerCase() === email.toLowerCase().trim()) ||
+          (savedOwner && savedOwner === email.toLowerCase().trim());
+
+        if (!matchesEmail) {
           setAuthError('Credenciales inválidas o correo aún sin confirmar.');
           return;
         }
@@ -389,7 +399,7 @@ export default function QrEmergencyPage({
     setIsEditing(true);
   };
 
-  // 6. Recuperar contraseña por correo electrónico (apuntando a https://resq-qr.vercel.app/reset-password)
+  // Recuperar contraseña por correo electrónico
   const handlePasswordRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -428,7 +438,6 @@ export default function QrEmergencyPage({
     );
   }
 
-  // Lista dinámica de contactos de emergencia cargados (hasta 3)
   const contactsList = [
     {
       name: profile.emergency_contact_1_name,
@@ -507,7 +516,6 @@ export default function QrEmergencyPage({
           )}
 
           <form onSubmit={handleSaveProfile} className="space-y-6">
-            {/* Paso 1: Cuenta (solo al activar por primera vez) */}
             {profile.status === 'unclaimed' && (
               <section className="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 space-y-4">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-orange-400">
@@ -555,7 +563,6 @@ export default function QrEmergencyPage({
                 {t.claimStepMedical}
               </h3>
 
-              {/* 2. Subir Foto del Piloto */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 flex items-center gap-4">
                 <div className="shrink-0">
                   {profile.rider_photo_url ? (
@@ -622,7 +629,6 @@ export default function QrEmergencyPage({
                 </div>
               </div>
 
-              {/* 3. Obra Social + Número de Obra Social */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
@@ -692,7 +698,6 @@ export default function QrEmergencyPage({
                 />
               </div>
 
-              {/* 4. Campo Observaciones */}
               <div>
                 <label className="block text-xs font-semibold text-orange-300 mb-1">
                   📝 Observaciones / Indicaciones Especiales
@@ -713,7 +718,6 @@ export default function QrEmergencyPage({
                 {t.claimStepVehicle}
               </h3>
 
-              {/* Contacto 1 (Principal) */}
               <div className="space-y-2">
                 <p className="text-xs font-bold text-emerald-400">
                   Contacto de Emergencia 1 (Principal) *
@@ -752,7 +756,6 @@ export default function QrEmergencyPage({
                 </div>
               </div>
 
-              {/* 5. Botón para desplegar Contacto 2 y Contacto 3 */}
               {!showExtraContacts ? (
                 <button
                   type="button"
@@ -837,7 +840,6 @@ export default function QrEmergencyPage({
 
               <hr className="border-slate-800" />
 
-              {/* Datos de la Moto */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
@@ -914,7 +916,6 @@ export default function QrEmergencyPage({
                 </div>
               </div>
 
-              {/* 1. Subir Foto de la Moto desde archivo/cámara (SIN pedir URL) */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
                 <label className="block text-xs font-bold text-white">
                   🏍️ Foto de tu Moto (Subir desde tu galería o tomar foto)
@@ -955,7 +956,6 @@ export default function QrEmergencyPage({
   // ============================================================================
   return (
     <main className="min-h-screen bg-[#0b0f17] text-slate-100 pb-14">
-      {/* Barra Superior Multilingüe Instantánea (ES / EN / PT) */}
       <header className="sticky top-0 z-30 bg-[#0b0f17]/95 backdrop-blur border-b border-slate-800 px-4 py-2.5">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
@@ -989,7 +989,6 @@ export default function QrEmergencyPage({
         </div>
       </header>
 
-      {/* Cinta Roja Táctica SOS */}
       <div className="bg-red-600 text-white text-center py-1.5 px-3 text-xs font-black tracking-widest uppercase">
         🚨 {t.sosBanner} · « Escaneá. Asistí. Rescatá. »
       </div>
@@ -1124,7 +1123,6 @@ export default function QrEmergencyPage({
             ))}
           </div>
 
-          {/* Números de Emergencia Locales en Ruta */}
           <div className="pt-2">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
               🚑 {t.localEmergencyNumbers}
@@ -1194,16 +1192,13 @@ export default function QrEmergencyPage({
             </div>
           )}
 
-          {/* Obra Social y Número de Obra Social bien diferenciados */}
           {(profile.health_insurance || profile.health_insurance_number) && (
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="block text-[10px] font-bold uppercase text-slate-400">
                   {t.healthInsurance}
                 </span>
-                <strong className="text-white text-sm">
-                  {profile.health_insurance || '—'}
-                </strong>
+                <strong className="text-white text-sm">{profile.health_insurance || '—'}</strong>
               </div>
               <div>
                 <span className="block text-[10px] font-bold uppercase text-slate-400">
@@ -1277,7 +1272,6 @@ export default function QrEmergencyPage({
           </div>
         </section>
 
-        {/* Nota de Privacidad Antirrobo + Botón de Login / Recuperar Clave del Piloto */}
         <footer className="pt-2 text-center space-y-3">
           <p className="text-[11px] text-slate-400 bg-slate-900/60 border border-slate-800/80 rounded-xl p-2.5">
             🛡️ {t.privacyNotice}
@@ -1298,7 +1292,7 @@ export default function QrEmergencyPage({
         </footer>
       </div>
 
-      {/* 6. Modal Soy el Piloto: Ingresar o Recuperar Contraseña */}
+      {/* Modal Soy el Piloto: Ingresar o Recuperar Contraseña */}
       {showLoginModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#131b2e] border border-slate-700 rounded-2xl max-w-sm w-full p-5 space-y-4">
@@ -1317,7 +1311,6 @@ export default function QrEmergencyPage({
               </button>
             </div>
 
-            {/* Selector de pestaña Ingresar vs Recuperar */}
             <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
               <button
                 type="button"
