@@ -422,6 +422,12 @@ export default function AdminDashboardPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              href={`/qrs-a4?prefix=${batchValidation.cleanPrefix || 'USH'}&from=${batchStartStr || '0001'}&to=${batchEndStr || '0024'}`}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white shadow-lg shadow-emerald-900/30 border border-emerald-400/40"
+            >
+              🖨️ Imprimir QRs en A4 (Resina)
+            </Link>
+            <Link
               href="/blister"
               className="px-3.5 py-2 rounded-xl bg-[#ff5500] hover:bg-orange-600 text-xs font-black text-white shadow"
             >
@@ -845,6 +851,12 @@ export default function AdminDashboardPage() {
                   ({batchValidation.requestedCodes.length} códigos)
                 </span>
               )}
+              <Link
+                href={`/qrs-a4?prefix=${batchValidation.cleanPrefix || 'USH'}&from=${batchStartStr || '0001'}&to=${batchEndStr || '0024'}`}
+                className="ml-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] uppercase tracking-wider shadow transition"
+              >
+                🖨️ Imprimir este Rango en A4 (Resina)
+              </Link>
             </div>
 
             <div>
